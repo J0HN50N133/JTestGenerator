@@ -83,7 +83,6 @@ public class SimpleGenerator {
                 for (Unit t : ug.getTails()) {
                     path = ug.getExtendedBasicBlockPathBetween(h, t);
                     System.out.println("The path is: " + path.toString());
-
                     pathConstraint = calPathConstraint(path);
                     //如果路径约束为空字符串，表示路径约束为恒真
                     if (pathConstraint.isEmpty())
@@ -148,17 +147,25 @@ public class SimpleGenerator {
         System.out.println("The step conditions with JimpleVars are: " + stepConditionsWithJimpleVars);
 
         //bug 没有考虑jVars为空的情况
-        if (jVars.size() != 0) { //把所有生成的中间变量用参数来表示
-            for (String cond : stepConditionsWithJimpleVars) {
-                //替换条件里的Jimple变量
-                for (Local lv : jVars) {
-                    if (cond.contains(lv.toString())) {
-                        stepConditions.add(cond.replace(lv.toString(), assignList.get(lv.toString()).trim()));
+        //把所有生成的中间变量用参数来表示
+        for (String cond : stepConditionsWithJimpleVars) {
+            //替换条件里的Jimple变量
+            String temp = "";//作为替换后的字符串
+            if (cond.contains("$")) {
+                String[] strArr = cond.split(" ");
+
+                for(int i = 0; i<strArr.length; ++i){
+                    String str = strArr[i];
+                    if(str.startsWith("$")){
+                        strArr[i] = assignList.get(str.trim());
                     }
+                    temp += strArr[i] + " ";
                 }
+                stepConditions.add(temp);
+//                stepConditions.add(cond.replace(lv.toString(), assignList.get(lv.toString()).trim()));
             }
-        } else
-            stepConditions = stepConditionsWithJimpleVars;
+
+        }
 
         if (stepConditions.isEmpty())
             return "";
