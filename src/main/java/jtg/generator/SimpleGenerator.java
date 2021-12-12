@@ -25,6 +25,7 @@ public class SimpleGenerator {
     private String mtdName;
     private UnitGraph ug;
     private Body body;
+    private ArrayList<String> expectResSet;
 
 
     public SimpleGenerator(String className, String methodName) {
@@ -45,11 +46,14 @@ public class SimpleGenerator {
     }
 
 
-    private List<Local> getJVars() {
+    private List<Local> getJVars() {//获得除了参数之外的其他的生成的变量
         //Jimple自身增加的Locals，不是被测代码真正的变量
         ArrayList<Local> jimpleVars = new ArrayList<Local>();
         for (Local l : body.getLocals()) {
-            if (l.toString().startsWith("$")) jimpleVars.add(l);
+            if (l.toString().startsWith("$")) {
+                jimpleVars.add(l);
+//                System.out.println("getJVars(): " + l.toString());
+            }
         }
         return jimpleVars;
     }
@@ -66,12 +70,14 @@ public class SimpleGenerator {
 
         List<Unit> path = null;
         ArrayList<String> testSet = null;
+        expectResSet = null;
         String pathConstraint = "";
 
         System.out.println("============================================================================");
         System.out.println("Generating test case inputs for method: " + clsName + "." + mtdName + "()");
         System.out.println("============================================================================");
         try {
+            expectResSet = new ArrayList<String>();
             testSet = new ArrayList<String>();
             for (Unit h : ug.getHeads())
                 for (Unit t : ug.getTails()) {
@@ -80,10 +86,11 @@ public class SimpleGenerator {
 
                     pathConstraint = calPathConstraint(path);
                     //如果路径约束为空字符串，表示路径约束为恒真
-                    if (pathConstraint.isEmpty()) testSet.add(randomTC(body.getParameterLocals()));
+                    if (pathConstraint.isEmpty())
+                        testSet.add(randomTC(body.getParameterLocals()));
                     System.out.println("The corresponding path constraint is: " + pathConstraint);
                     if (!pathConstraint.isEmpty())
-                        testSet.add(solve(pathConstraint));
+                        testSet.add(solve(pathConstraint));//!( i0 <= 0 )
                 }
         } catch (Exception e) {
             System.err.println("Error in generating test cases: ");
@@ -92,10 +99,9 @@ public class SimpleGenerator {
         if (!testSet.isEmpty()) {
             System.out.println("");
             System.out.println("The generated test case inputs:");
-            int count = 1;
-            for (String tc : testSet) {
-                System.out.println("( " + count + " ) " + tc.toString());
-                count++;
+            for (int count = 0; count < testSet.size(); ++count) {
+                System.out.println("( " + (count+1) + " ) "
+                + testSet.get(count).toString() + ", expected result:"+expectResSet.get(count));
             }
         }
         return testSet;
@@ -114,11 +120,11 @@ public class SimpleGenerator {
 
         for (Unit stmt : path) {
 
-            if (stmt instanceof JAssignStmt) {
+            if (stmt instanceof JAssignStmt) { //赋值语句
                 assignList.put(((JAssignStmt) stmt).getLeftOp().toString(), ((JAssignStmt) stmt).getRightOp().toString());
                 continue;
             }
-            if (stmt instanceof JIfStmt) {
+            if (stmt instanceof JIfStmt) { //如果这个unit是if语句也就是控制语句
 
                 String ifstms = ((JIfStmt) stmt).getCondition().toString();
                 int nextUnitIndex = path.indexOf(stmt) + 1;
@@ -132,14 +138,17 @@ public class SimpleGenerator {
                 stepConditionsWithJimpleVars.add(ifstms);
                 continue;
             }
-            if (stmt instanceof JReturnStmt) {
+            if (stmt instanceof JReturnStmt) {//返回语句
                 expectedResult = stmt.toString().replace("return", "").trim();
+
+                System.out.println("expectedResult is "+expectedResult);
+                expectResSet.add(expectedResult);
             }
         }
         System.out.println("The step conditions with JimpleVars are: " + stepConditionsWithJimpleVars);
 
         //bug 没有考虑jVars为空的情况
-        if (jVars.size() != 0) {
+        if (jVars.size() != 0) { //把所有生成的中间变量用参数来表示
             for (String cond : stepConditionsWithJimpleVars) {
                 //替换条件里的Jimple变量
                 for (Local lv : jVars) {
@@ -159,15 +168,15 @@ public class SimpleGenerator {
             pathConstraint = pathConstraint + " && " + stepConditions.get(i);
             i++;
         }
-        //System.out.println("The path expression is: " + pathConstraint);
+        System.out.println("The path expression is: " + pathConstraint);
         return pathConstraint;
     }
 
-    public String solve(String pathConstraint) throws Exception {
+    public String solve(String pathConstraint) throws Exception {//根据路径生成测试用例
         return Z3Solver.solve(pathConstraint);
     }
 
-    public String randomTC(List<Local> parameters) {
+    public String randomTC(List<Local> parameters) { //此时路径对于变量没有要求,可以随机赋值变量
 
         String varName;
         String varValue = "";
@@ -178,8 +187,26 @@ public class SimpleGenerator {
             if ("int".equals(para.getType().toString())) {
                 varValue = String.valueOf((int)(Math.random() * 10));
             }
-            if ("String".equals(para.getType().toString())) {
+            if ("short".equals(para.getType().toString())) {
+                varValue = String.valueOf((int)(Math.random() * 10)%32768);
+            }
+            if ("long".equals(para.getType().toString())) {
+                varValue = String.valueOf((int)(Math.random() * 10));
+            }
+            if ("byte".equals(para.getType().toString())) {
+                varValue = String.valueOf((int)(Math.random() * 10)%128);
+            }
+            if ("java.lang.String".equals(para.getType().toString())) {//张智渊修复
                 varValue = "abc";
+            }
+            if ("boolean".equals(para.getType().toString())) {
+                varValue = "true";
+            }
+            if ("float".equals(para.getType().toString())) {
+                varValue = String.valueOf((int)(Math.random() * 10) / 3);
+            }
+            if ("double".equals(para.getType().toString())) {
+                varValue = String.valueOf((int)(Math.random() * 10) / 3);
             }
             //其它的基本类型没写
             testinput = testinput + " " + varName + "=" + varValue;

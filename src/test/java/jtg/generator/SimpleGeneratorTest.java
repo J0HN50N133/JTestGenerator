@@ -27,8 +27,6 @@ class SimpleGeneratorTest {
         SimpleGenerator sg = new SimpleGenerator(clspath, clsName, methodName);
         List<String> ts = sg.generate();
         assertTrue(!ts.isEmpty());
-
-
     }
 
     @Test
