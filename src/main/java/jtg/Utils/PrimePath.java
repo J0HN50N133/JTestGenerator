@@ -1,18 +1,23 @@
 package jtg.Utils;
 
 import jtg.solver.Z3Solver;
-import soot.Local;
 import soot.Unit;
 import soot.jimple.internal.JAssignStmt;
 import soot.jimple.internal.JIfStmt;
 import soot.jimple.internal.JReturnStmt;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class PrimePath {
+    public List<Unit> getPath() {
+        return path;
+    }
+
     private List<Unit> path;
 
     public PrimePath(){}
@@ -23,26 +28,51 @@ public class PrimePath {
 
     @Override
     public String toString() {
-       String re = "";
+       StringBuilder sb= new StringBuilder();
        for(Unit unit:path){
-           re += unit.toString();
+           sb.append(unit.toString()).append("\n");
        }
-       return re;
+       return sb.toString();
     }
 
     public String solve(){
         try {
-            return Z3Solver.solve(calPathConstraint(path));
+            return Z3Solver.solve(calPathConstraint());
         } catch (Exception e) {
             e.printStackTrace();
             return null;
         }
-
     }
 
+    // 把Jimple生成的变量递归替换回原有变量
+    private static final Pattern p = Pattern.compile("\\$[a-z]+[0-9]+");
+    private String washVariable(Map<String, String> assignList, String cond) {
+        if (cond.contains("$")){
+            StringBuilder afterWash = new StringBuilder();
+            String[] strArr = cond.split(" ");
+            for(int i = 0; i<strArr.length; ++i){
+                String str = strArr[i];
+                if(str.startsWith("$")){
+                    strArr[i] = assignList.get(str.trim());
+                }else if(str.contains("$")){
+                    Matcher m = p.matcher(str);
+                    String leftOp = "";
+                    if(m.find()){
+                        leftOp = m.group(0);
+                    }
+                    String replacement = assignList.get(leftOp).replaceAll("\\$", "RGX_CHAR_DOLLAR");// encode replacement;
+                    str = str.replaceAll("\\$[a-z]+[0-9]+", replacement);
+                    str = str.replaceAll("RGX_CHAR_DOLLAR", "\\$"); // decode replacement
+                    strArr[i] = str;
+                }
+                afterWash.append(strArr[i]).append(" ");
+            }
+            return washVariable(assignList, afterWash.toString());
+        }
+        return cond;
+    }
 
-
-    public String calPathConstraint(List<Unit> path) {
+    public String calPathConstraint() {
 
         String pathConstraint = "";
         String expectedResult = "";
@@ -73,32 +103,13 @@ public class PrimePath {
             }
             if (stmt instanceof JReturnStmt) {//返回语句
                 expectedResult = stmt.toString().replace("return", "").trim();
-//
-//                System.out.println("expectedResult is "+expectedResult);
-//                expectResSet.add(expectedResult);
             }
         }
-        stepConditions = stepConditionsWithJimpleVars;
 
         //bug 没有考虑jVars为空的情况
        //把所有生成的中间变量用参数来表示
         for (String cond : stepConditionsWithJimpleVars) {
-            //替换条件里的Jimple变量
-            String temp = "";//作为替换后的字符串
-            if (cond.contains("$")) {
-                String[] strArr = cond.split(" ");
-
-                for(int i = 0; i<strArr.length; ++i){
-                    String str = strArr[i];
-                    if(str.startsWith("$")){
-                        strArr[i] = assignList.get(str.trim());
-                    }
-                    temp += strArr[i] + " ";
-                }
-                stepConditions.add(temp);
-//                stepConditions.add(cond.replace(lv.toString(), assignList.get(lv.toString()).trim()));
-            }
-
+                stepConditions.add(washVariable(assignList, cond));
         }
 
 
