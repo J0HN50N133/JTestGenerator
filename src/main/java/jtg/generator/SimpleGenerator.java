@@ -1,6 +1,6 @@
 package jtg.generator;
 
-import jtg.exception.ConstraintSolveException;
+import jtg.Utils.PrimePath;
 import jtg.graphics.SootCFG;
 import jtg.solver.Z3Solver;
 import jtg.visualizer.Visualizer;
@@ -8,15 +8,12 @@ import soot.Body;
 import soot.Local;
 import soot.Unit;
 import soot.jimple.internal.JAssignStmt;
-import soot.jimple.internal.JIdentityStmt;
 import soot.jimple.internal.JIfStmt;
 import soot.jimple.internal.JReturnStmt;
 import soot.toolkits.graph.UnitGraph;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 public class SimpleGenerator {
 
@@ -220,5 +217,65 @@ public class SimpleGenerator {
         }
         return testinput;
     }
+    private List<Unit> getAllUnit(UnitGraph ug){
+        List<Unit> units = new LinkedList<>();
+        for (Unit unit : ug) {
+            units.add(unit);
+        }
+        return units;
+    }
+    public Set<PrimePath> calculatePrimePath(){
+        System.out.println(ug.getBody().toString());
+        Set<PrimePath> set = new LinkedHashSet<>();
+        for (Unit unit : ug) {
+            // 计算以unit为根的结点树
+            dfs(unit,new ArrayList<>(), set);
+        }
+        return set;
+    }
 
+    private void dfsDone(Unit unit,List<Unit> currentPath, Set<PrimePath> set){
+        List<Unit> primepathList = new ArrayList<>(currentPath);
+        if(unit != null){
+            primepathList.add(unit);
+        }
+        PrimePath primePath = new PrimePath(primepathList);
+        if (set.contains(primePath)){
+            return;
+        }
+        String s = primePath.toString();
+        for (PrimePath p: set){
+            if (p.toString().contains(s)){
+                return;
+            }
+        }
+        set.add(primePath);
+    }
+
+    private void dfs(Unit unit,List<Unit> currentPath, Set<PrimePath> set) {
+        if (currentPath.isEmpty()){
+            // 第一个结点
+            currentPath.add(unit);
+            for (Unit succ : ug.getSuccsOf(unit)) {
+                dfs(succ, currentPath, set);
+            }
+        }else{
+            if(ug.getTails().contains(unit)){
+                // unit is final node this branch done
+                dfsDone(unit, currentPath, set);
+            }else{
+                if (currentPath.get(0).equals(unit)){
+                    // head and tails same, done
+                    dfsDone(unit, currentPath, set);
+                }else if(currentPath.contains(unit)) {
+                    dfsDone(null, currentPath, set);
+                }else{
+                    currentPath.add(unit);
+                    for (Unit succ : ug.getSuccsOf(unit)) {
+                        dfs(succ, currentPath, set);
+                    }
+                }
+            }
+        }
+    }
 }
