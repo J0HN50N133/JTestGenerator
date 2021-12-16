@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SimpleGeneratorTest {
 
@@ -37,7 +37,15 @@ class SimpleGeneratorTest {
         SimpleGenerator sg = new SimpleGenerator(clspath, clsName, methodName);
         List<String> ts = sg.generate();
         assertTrue(!ts.isEmpty());
-
+    }
+    @Test
+    void loop_test(){
+        String clspath = System.getProperty("user.dir") + File.separator + "target" + File.separator + "test-classes";
+        String clsName = "cut.LoopTest";
+        String methodName = "isPrime";
+        SimpleGenerator sg = new SimpleGenerator(clspath, clsName, methodName);
+        List<String> ts = sg.generate();
+        assertTrue(!ts.isEmpty());
     }
     @Test
     void sequence_correct() {
