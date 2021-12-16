@@ -65,7 +65,6 @@ public class SimpleGenerator {
 
     public List<String> generate() {
 
-        List<Unit> path = null;
         ArrayList<String> testSet = null;
         expectResSet = null;
         String pathConstraint = "";
@@ -76,18 +75,18 @@ public class SimpleGenerator {
         try {
             expectResSet = new ArrayList<String>();
             testSet = new ArrayList<String>();
-            for (Unit h : ug.getHeads())
-                for (Unit t : ug.getTails()) {
-                    path = ug.getExtendedBasicBlockPathBetween(h, t);
-                    System.out.println("The path is: " + path.toString());
-                    pathConstraint = calPathConstraint(path);
-                    //如果路径约束为空字符串，表示路径约束为恒真
-                    if (pathConstraint.isEmpty())
-                        testSet.add(randomTC(body.getParameterLocals()));
-                    System.out.println("The corresponding path constraint is: " + pathConstraint);
-                    if (!pathConstraint.isEmpty())
-                        testSet.add(solve(pathConstraint));//!( i0 <= 0 )
-                }
+            Set<PrimePath> primePaths = calculatePrimePath();
+            for (PrimePath primePath : primePaths) {
+                System.out.println("The path is: \n" + primePath);
+                pathConstraint = primePath.calPathConstraint();
+                //如果路径约束为空字符串，表示路径约束为恒真
+                if (pathConstraint.isEmpty())
+                    testSet.add(randomTC(body.getParameterLocals()));
+                System.out.println("The corresponding path constraint is: " + pathConstraint);
+                if (!pathConstraint.isEmpty())
+                    testSet.add(solve(pathConstraint));//!( i0 <= 0 )
+                expectResSet.add(primePath.getExpectRes());
+            }
         } catch (Exception e) {
             System.err.println("Error in generating test cases: ");
             System.err.println(e.toString());
@@ -96,8 +95,7 @@ public class SimpleGenerator {
             System.out.println("");
             System.out.println("The generated test case inputs:");
             for (int count = 0; count < testSet.size(); ++count) {
-                System.out.println("( " + (count+1) + " ) "
-                + testSet.get(count).toString() + ", expected result:"+expectResSet.get(count));
+                System.out.printf("(%d) %s, expected result: %s\n", count+1, testSet.get(count), expectResSet.get(count));
             }
         }
         return testSet;

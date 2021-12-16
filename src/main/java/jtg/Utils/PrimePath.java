@@ -19,6 +19,7 @@ public class PrimePath {
     }
 
     private List<Unit> path;
+    private String expectRes;
 
     public PrimePath(){}
 
@@ -74,8 +75,7 @@ public class PrimePath {
 
     public String calPathConstraint() {
 
-        String pathConstraint = "";
-        String expectedResult = "";
+        String pathConstraint;
 
         HashMap<String, String> assignList = new HashMap<>();
         ArrayList<String> stepConditionsWithJimpleVars = new ArrayList<String>();
@@ -101,8 +101,8 @@ public class PrimePath {
                 stepConditionsWithJimpleVars.add(ifstms);
                 continue;
             }
-            if (stmt instanceof JReturnStmt) {//返回语句
-                expectedResult = stmt.toString().replace("return", "").trim();
+            if (stmt instanceof JReturnStmt){
+                expectRes = washVariable(assignList, ((JReturnStmt) stmt).getOp().toString());
             }
         }
 
@@ -126,4 +126,7 @@ public class PrimePath {
     }
 
 
+    public String getExpectRes() {
+        return expectRes;
+    }
 }
