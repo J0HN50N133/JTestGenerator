@@ -6,14 +6,11 @@ import soot.jimple.internal.JAssignStmt;
 import soot.jimple.internal.JIfStmt;
 import soot.jimple.internal.JReturnStmt;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class PrimePath {
+public class Path implements Cloneable {
     public List<Unit> getPath() {
         return path;
     }
@@ -21,9 +18,12 @@ public class PrimePath {
     private List<Unit> path;
     private String expectRes;
 
-    public PrimePath(){}
+    public Path(Path src){
+        this.path = new LinkedList<>(src.getPath());
+        this.expectRes = src.expectRes;
+    }
 
-    public PrimePath(List<Unit> path){
+    public Path(List<Unit> path){
         this.path = path;
     }
 
@@ -128,5 +128,13 @@ public class PrimePath {
 
     public String getExpectRes() {
         return expectRes;
+    }
+
+    public void appendUnit(Unit unit) {
+        path.add(unit);
+    }
+
+    public void addUnitInHead(Unit unit) {
+        path.add(0, unit);
     }
 }

@@ -1,6 +1,6 @@
 package jtg.generator;
 
-import jtg.Utils.PrimePath;
+import jtg.Utils.Path;
 import jtg.graphics.SootCFG;
 import jtg.solver.Z3Solver;
 import jtg.visualizer.Visualizer;
@@ -49,7 +49,6 @@ public class SimpleGenerator {
         for (Local l : body.getLocals()) {
             if (l.toString().startsWith("$")) {
                 jimpleVars.add(l);
-//                System.out.println("getJVars(): " + l.toString());
             }
         }
         return jimpleVars;
@@ -75,103 +74,31 @@ public class SimpleGenerator {
         try {
             expectResSet = new ArrayList<String>();
             testSet = new ArrayList<String>();
-            Set<PrimePath> primePaths = calculatePrimePath();
-            for (PrimePath primePath : primePaths) {
-                System.out.println("The path is: \n" + primePath);
-                pathConstraint = primePath.calPathConstraint();
+            Set<Path> primePaths = calculatePrimePath();
+            List<Path> testPaths = calculateTestPath(primePaths);
+            for (Path testPath : testPaths) {
+                System.out.println("The path is: \n" + testPath);
+                pathConstraint = testPath.calPathConstraint();
                 //如果路径约束为空字符串，表示路径约束为恒真
                 if (pathConstraint.isEmpty())
                     testSet.add(randomTC(body.getParameterLocals()));
                 System.out.println("The corresponding path constraint is: " + pathConstraint);
                 if (!pathConstraint.isEmpty())
                     testSet.add(solve(pathConstraint));//!( i0 <= 0 )
-                expectResSet.add(primePath.getExpectRes());
+                expectResSet.add(testPath.getExpectRes());
             }
         } catch (Exception e) {
             System.err.println("Error in generating test cases: ");
-            System.err.println(e.toString());
+            System.err.println(e);
         }
         if (!testSet.isEmpty()) {
-            System.out.println("");
+            System.out.println();
             System.out.println("The generated test case inputs:");
             for (int count = 0; count < testSet.size(); ++count) {
                 System.out.printf("(%d) %s, expected result: %s\n", count+1, testSet.get(count), expectResSet.get(count));
             }
         }
         return testSet;
-    }
-
-    public String calPathConstraint(List<Unit> path) {
-
-        List<Local> jVars = getJVars();
-
-        String pathConstraint = "";
-        String expectedResult = "";
-
-        HashMap<String, String> assignList = new HashMap<>();
-        ArrayList<String> stepConditionsWithJimpleVars = new ArrayList<String>();
-        ArrayList<String> stepConditions = new ArrayList<String>();
-
-        for (Unit stmt : path) {
-
-            if (stmt instanceof JAssignStmt) { //赋值语句
-                assignList.put(((JAssignStmt) stmt).getLeftOp().toString(), ((JAssignStmt) stmt).getRightOp().toString());
-                continue;
-            }
-            if (stmt instanceof JIfStmt) { //如果这个unit是if语句也就是控制语句
-
-                String ifstms = ((JIfStmt) stmt).getCondition().toString();
-                int nextUnitIndex = path.indexOf(stmt) + 1;
-                Unit nextUnit = path.get(nextUnitIndex);
-
-                //如果ifstmt的后继语句不是ifstmt中goto语句，说明ifstmt中的条件为假
-                if (!((JIfStmt) stmt).getTarget().equals(nextUnit))
-                    ifstms = "!( " + ifstms + " )";
-                else
-                    ifstms = "( " + ifstms + " )";
-                stepConditionsWithJimpleVars.add(ifstms);
-                continue;
-            }
-            if (stmt instanceof JReturnStmt) {//返回语句
-                expectedResult = stmt.toString().replace("return", "").trim();
-
-                System.out.println("expectedResult is "+expectedResult);
-                expectResSet.add(expectedResult);
-            }
-        }
-        System.out.println("The step conditions with JimpleVars are: " + stepConditionsWithJimpleVars);
-
-        //bug 没有考虑jVars为空的情况
-        //把所有生成的中间变量用参数来表示
-        for (String cond : stepConditionsWithJimpleVars) {
-            //替换条件里的Jimple变量
-            String temp = "";//作为替换后的字符串
-            if (cond.contains("$")) {
-                String[] strArr = cond.split(" ");
-
-                for(int i = 0; i<strArr.length; ++i){
-                    String str = strArr[i];
-                    if(str.startsWith("$")){
-                        strArr[i] = assignList.get(str.trim());
-                    }
-                    temp += strArr[i] + " ";
-                }
-                stepConditions.add(temp);
-//                stepConditions.add(cond.replace(lv.toString(), assignList.get(lv.toString()).trim()));
-            }
-
-        }
-
-        if (stepConditions.isEmpty())
-            return "";
-        pathConstraint = stepConditions.get(0);
-        int i = 1;
-        while (i < stepConditions.size()) {
-            pathConstraint = pathConstraint + " && " + stepConditions.get(i);
-            i++;
-        }
-        System.out.println("The path expression is: " + pathConstraint);
-        return pathConstraint;
     }
 
     public String solve(String pathConstraint) throws Exception {//根据路径生成测试用例
@@ -215,16 +142,10 @@ public class SimpleGenerator {
         }
         return testinput;
     }
-    private List<Unit> getAllUnit(UnitGraph ug){
-        List<Unit> units = new LinkedList<>();
-        for (Unit unit : ug) {
-            units.add(unit);
-        }
-        return units;
-    }
-    public Set<PrimePath> calculatePrimePath(){
+
+    public Set<Path> calculatePrimePath(){
         System.out.println(ug.getBody().toString());
-        Set<PrimePath> set = new LinkedHashSet<>();
+        Set<Path> set = new LinkedHashSet<>();
         for (Unit unit : ug) {
             // 计算以unit为根的结点树
             dfs(unit,new ArrayList<>(), set);
@@ -232,17 +153,101 @@ public class SimpleGenerator {
         return set;
     }
 
-    private void dfsDone(Unit unit,List<Unit> currentPath, Set<PrimePath> set){
+    public List<Path> calculateTestPath(Set<Path> primePaths){
+        PriorityQueue<Path> pq = new PriorityQueue<>((o1, o2) -> o2.getPath().size() - o1.getPath().size());
+        List<Path> testPaths = new LinkedList<>();
+        pq.addAll(primePaths);
+        while (!pq.isEmpty()) {
+            loop: {
+                Path path = pq.poll();
+                String pathStr = path.toString();
+                for (Path testPath : testPaths) {
+                    // 如果已经被覆盖那么不需要拓展了
+                    if (testPath.toString().contains(pathStr)) {
+                        break loop;
+                    }
+                }
+                List<Path> extendPaths = extendPath(path);
+                testPaths.addAll(extendPaths);
+            }
+        }
+        return testPaths;
+    }
+
+    private boolean isEntryNode(Unit unit){
+        return ug.getHeads().contains(unit);
+    }
+
+    private boolean isEndNode(Unit unit){
+        return ug.getTails().contains(unit);
+    }
+
+    private List<Path> extendTail(Path path){
+        List<Unit> unitList = path.getPath();
+        List<Path> result = new LinkedList<>();
+        Unit lastUnit = unitList.get(unitList.size() - 1);
+        if (isEndNode(lastUnit)){
+            result.add(path);
+            return result;
+        }else {
+            List<Unit> succs = ug.getSuccsOf(lastUnit);
+            if (succs.size() == 1) {
+                // 单节点没办法，直接加
+                Path newPath = new Path(path);
+                newPath.appendUnit(succs.get(0));
+                result.addAll(extendTail(newPath));
+            }else {
+                // 多结点的可能可以破环
+                for (Unit unit : ug.getSuccsOf(lastUnit)) {
+                    if (!unitList.contains(unit)){
+                        Path newPath = new Path(path);
+                        newPath.appendUnit(unit);
+                        result.addAll(extendTail(newPath));
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    private List<Path> extendHead(Path path){
+        List<Unit> unitList = path.getPath();
+        List<Path> result = new LinkedList<>();
+        Unit firstUnit = unitList.get(0);
+        if (isEntryNode(firstUnit)){
+            result.add(path);
+            return result;
+        }else {
+            for (Unit unit : ug.getPredsOf(firstUnit)) {
+                if (!unitList.contains(unit)){
+                    Path newPath = new Path(path);
+                    newPath.addUnitInHead(unit);
+                    result.addAll(extendHead(newPath));
+                }
+            }
+        }
+        return result;
+    }
+    private List<Path> extendPath(Path path) {
+        List<Path> result = new LinkedList<>();
+        List<Path> pathsExtendedTail = extendTail(path);
+        for (Path pathWithTail : pathsExtendedTail) {
+            result.addAll(extendHead(pathWithTail));
+        }
+        return result;
+    }
+
+    private void dfsDone(Unit unit,List<Unit> currentPath, Set<Path> set){
         List<Unit> primepathList = new ArrayList<>(currentPath);
         if(unit != null){
             primepathList.add(unit);
         }
-        PrimePath primePath = new PrimePath(primepathList);
+        Path primePath = new Path(primepathList);
         if (set.contains(primePath)){
             return;
         }
         String s = primePath.toString();
-        for (PrimePath p: set){
+        for (Path p: set){
             if (p.toString().contains(s)){
                 return;
             }
@@ -250,12 +255,12 @@ public class SimpleGenerator {
         set.add(primePath);
     }
 
-    private void dfs(Unit unit,List<Unit> currentPath, Set<PrimePath> set) {
+    private void dfs(Unit unit,List<Unit> currentPath, Set<Path> set) {
         if (currentPath.isEmpty()){
             // 第一个结点
             currentPath.add(unit);
             for (Unit succ : ug.getSuccsOf(unit)) {
-                dfs(succ, currentPath, set);
+                dfs(succ, new LinkedList<>(currentPath), set);
             }
         }else{
             if(ug.getTails().contains(unit)){
@@ -270,7 +275,7 @@ public class SimpleGenerator {
                 }else{
                     currentPath.add(unit);
                     for (Unit succ : ug.getSuccsOf(unit)) {
-                        dfs(succ, currentPath, set);
+                        dfs(succ, new LinkedList<>(currentPath), set);
                     }
                 }
             }
