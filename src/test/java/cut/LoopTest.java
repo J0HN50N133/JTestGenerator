@@ -6,7 +6,7 @@ public class LoopTest {
         if (i <= 1){
             return false;
         }
-        for (int j = 2; j < i/2; j++){
+        for (int j = 2; j < i; j++){
             if (i % j == 0)
                 return false;
         }
@@ -35,5 +35,14 @@ public class LoopTest {
             iSub++;
         }
         return rtnIndex;
+    }
+    public int raise(int x, int k){
+        int r = 1;
+        if (k > 0) {
+            while (k-- != 0) {
+                r *= x;
+            }
+        }
+        return r;
     }
 }
