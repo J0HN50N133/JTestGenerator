@@ -49,6 +49,8 @@ public class VariableType {
     }
 
     public boolean generateString(String s){
+        if(s.equals("str"))
+            return true;
         if (s.length() == 1) return true;
         return false;
     }

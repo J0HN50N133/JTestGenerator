@@ -15,4 +15,5 @@ public class Z3StringApi {
                 new FuncDecl[]{decl}
         )[0];
     }
+
 }

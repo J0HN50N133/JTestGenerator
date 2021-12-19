@@ -1,6 +1,6 @@
 package jtg.generator;
 
-import jtg.Utils.Path;
+import jtg.utils.Path;
 import jtg.graphics.SootCFG;
 import jtg.solver.Z3Solver;
 import jtg.visualizer.Visualizer;
@@ -80,8 +80,10 @@ public class SimpleGenerator {
                 if (pathConstraint.isEmpty())
                     testSet.add(randomTC(body.getParameterLocals()));
                 System.out.println("The corresponding path constraint is: " + pathConstraint);
-                if (!pathConstraint.isEmpty())
+                if (!pathConstraint.isEmpty()){
                     testSet.add(solve(pathConstraint));//!( i0 <= 0 )
+                }
+
                 expectResSet.add(testPath.getExpectRes());
             }
         } catch (Exception e) {

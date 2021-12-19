@@ -108,4 +108,5 @@ class VariableTypeTest {
         List<String> ts = sg.generate();
         assertTrue(!ts.isEmpty());
     }
+
 }

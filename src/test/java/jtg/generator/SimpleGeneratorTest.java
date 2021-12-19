@@ -1,6 +1,6 @@
 package jtg.generator;
 
-import jtg.Utils.Path;
+import jtg.utils.Path;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -10,6 +10,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SimpleGeneratorTest {
+
 
     @Test
     void solo_if_correct() {
