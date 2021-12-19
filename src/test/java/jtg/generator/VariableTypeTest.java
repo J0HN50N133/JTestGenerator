@@ -98,4 +98,14 @@ class VariableTypeTest {
         List<String> ts = sg.generate();
         assertTrue(!ts.isEmpty());
     }
+
+    @Test
+    void generateClass() {
+        String clspath = System.getProperty("user.dir") + File.separator + "target" + File.separator + "test-classes";
+        String clsName = "cut.VariableType";
+        String methodName = "generateClass";
+        SimpleGenerator sg = new SimpleGenerator(clspath, clsName, methodName);
+        List<String> ts = sg.generate();
+        assertTrue(!ts.isEmpty());
+    }
 }

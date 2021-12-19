@@ -1,5 +1,16 @@
 package cut;
 
+class A {
+    public int getA() {
+        return a;
+    }
+
+    public void setA(int a) {
+        this.a = a;
+    }
+
+    int a;
+}
 public class VariableType {
 
     public boolean generateInt(int i){
@@ -44,6 +55,10 @@ public class VariableType {
 
     public boolean generateArr(int[] arr){
         if (arr.length == 1) return false;
+        return true;
+    }
+    public boolean generateClass(A a){
+        if (a.getA() > 0) return false;
         return true;
     }
 }
