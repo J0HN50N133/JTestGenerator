@@ -7,9 +7,6 @@ import jtg.visualizer.Visualizer;
 import soot.Body;
 import soot.Local;
 import soot.Unit;
-import soot.jimple.internal.JAssignStmt;
-import soot.jimple.internal.JIfStmt;
-import soot.jimple.internal.JReturnStmt;
 import soot.toolkits.graph.UnitGraph;
 
 import java.io.File;
@@ -109,7 +106,7 @@ public class SimpleGenerator {
 
         String varName;
         String varValue = "";
-        String testinput = "";
+        StringBuilder testInput = new StringBuilder();
 
         for (Local para : parameters) {
             varName = para.getName();
@@ -138,9 +135,9 @@ public class SimpleGenerator {
                 varValue = String.valueOf((int)(Math.random() * 10) / 3);
             }
             //其它的基本类型没写
-            testinput = testinput + " " + varName + "=" + varValue;
+            testInput.append(" ").append(varName).append("=").append(varValue);
         }
-        return testinput;
+        return testInput.toString();
     }
 
     public Set<Path> calculatePrimePath(){
@@ -154,7 +151,7 @@ public class SimpleGenerator {
     }
 
     public List<Path> calculateTestPath(Set<Path> primePaths){
-        PriorityQueue<Path> pq = new PriorityQueue<>((o1, o2) -> o2.getPath().size() - o1.getPath().size());
+        PriorityQueue<Path> pq = new PriorityQueue<>((o1, o2) -> o2.getUnits().size() - o1.getUnits().size());
         List<Path> testPaths = new LinkedList<>();
         pq.addAll(primePaths);
         while (!pq.isEmpty()) {
@@ -183,7 +180,7 @@ public class SimpleGenerator {
     }
 
     private List<Path> extendTail(Path path){
-        List<Unit> unitList = path.getPath();
+        List<Unit> unitList = path.getUnits();
         List<Path> result = new LinkedList<>();
         Unit lastUnit = unitList.get(unitList.size() - 1);
         if (isEndNode(lastUnit)){
@@ -211,7 +208,7 @@ public class SimpleGenerator {
     }
 
     private List<Path> extendHead(Path path){
-        List<Unit> unitList = path.getPath();
+        List<Unit> unitList = path.getUnits();
         List<Path> result = new LinkedList<>();
         Unit firstUnit = unitList.get(0);
         if (isEntryNode(firstUnit)){

@@ -5,32 +5,38 @@ import soot.Unit;
 import soot.jimple.internal.JAssignStmt;
 import soot.jimple.internal.JIfStmt;
 import soot.jimple.internal.JReturnStmt;
+import soot.toolkits.graph.UnitGraph;
 
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class Path implements Cloneable {
-    public List<Unit> getPath() {
-        return path;
-    }
-
-    private List<Unit> path;
+public class Path {
+    // component of the path
+    private final List<Unit> units;
+    // the expectResult
     private String expectRes;
+    // the UnitGraph this Path belong to
+    private UnitGraph ug;
 
     public Path(Path src){
-        this.path = new LinkedList<>(src.getPath());
+        this.units = new LinkedList<>(src.getUnits());
         this.expectRes = src.expectRes;
+        this.ug = src.ug;
     }
 
-    public Path(List<Unit> path){
-        this.path = path;
+    public Path(List<Unit> units){
+        this.units = units;
+    }
+
+    public List<Unit> getUnits() {
+        return units;
     }
 
     @Override
     public String toString() {
-       StringBuilder sb= new StringBuilder();
-       for(Unit unit:path){
+       StringBuilder sb = new StringBuilder();
+       for(Unit unit: units){
            sb.append(unit.toString()).append("\n");
        }
        return sb.toString();
@@ -73,6 +79,20 @@ public class Path implements Cloneable {
         return cond;
     }
 
+    public void collectPathConstraint(){
+        List<Unit> pathConstraint = new LinkedList<>();
+        List<Unit> assignList = new LinkedList<>();
+        for (Unit unit : units) {
+            if (unit instanceof JIfStmt) {
+                JIfStmt ifStmt = (JIfStmt) unit;
+                pathConstraint.add(unit);
+            }
+            if (unit instanceof JAssignStmt) {
+                assignList.add(unit);
+            }
+        }
+    }
+
     public String calPathConstraint() {
 
         String pathConstraint;
@@ -81,7 +101,7 @@ public class Path implements Cloneable {
         ArrayList<String> stepConditionsWithJimpleVars = new ArrayList<String>();
         ArrayList<String> stepConditions = new ArrayList<String>();
 
-        for (Unit stmt : path) {
+        for (Unit stmt : units) {
 
             if (stmt instanceof JAssignStmt) { //赋值语句
                 assignList.put(((JAssignStmt) stmt).getLeftOp().toString(), ((JAssignStmt) stmt).getRightOp().toString());
@@ -90,8 +110,8 @@ public class Path implements Cloneable {
             if (stmt instanceof JIfStmt) { //如果这个unit是if语句也就是控制语句
 
                 String ifstms = ((JIfStmt) stmt).getCondition().toString();
-                int nextUnitIndex = path.indexOf(stmt) + 1;
-                Unit nextUnit = path.get(nextUnitIndex);
+                int nextUnitIndex = units.indexOf(stmt) + 1;
+                Unit nextUnit = units.get(nextUnitIndex);
 
                 //如果ifstmt的后继语句不是ifstmt中goto语句，说明ifstmt中的条件为假
                 if (!((JIfStmt) stmt).getTarget().equals(nextUnit))
@@ -131,10 +151,10 @@ public class Path implements Cloneable {
     }
 
     public void appendUnit(Unit unit) {
-        path.add(unit);
+        units.add(unit);
     }
 
     public void addUnitInHead(Unit unit) {
-        path.add(0, unit);
+        units.add(0, unit);
     }
 }
