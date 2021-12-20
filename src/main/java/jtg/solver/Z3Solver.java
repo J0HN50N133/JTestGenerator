@@ -3,7 +3,6 @@ package jtg.solver;
 import com.microsoft.z3.*;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
-import com.sun.xml.bind.v2.runtime.reflect.opt.Const;
 import jtg.utils.Path;
 import soot.*;
 import soot.jimple.*;
@@ -83,117 +82,98 @@ public class Z3Solver {
                 // TODO: support Array
                 valueExprMap.put(stmt.getLeftOp(), ctx.mkConst(stmt.getLeftOp().toString() ,sort));
             } else if (unit instanceof JIfStmt) {
-                JIfStmt stmt = (JIfStmt) unit;
-                Value condition = stmt.getCondition();
-                Expr condExpr = null;
-                if (condition instanceof BinopExpr) {
-                    Value op1 = ((BinopExpr) condition).getOp1();
-                    Value op2 = ((BinopExpr) condition).getOp2();
-                    Expr expr1 = (op1 instanceof Constant)?convConst(ctx, op1):valueExprMap.get(op1);
-                    Expr expr2 = (op2 instanceof Constant)?convConst(ctx, op2):valueExprMap.get(op2);
-                    if (condition instanceof JEqExpr) {
-                        condExpr = ctx.mkEq(expr1, expr2);
-                    } else if (condition instanceof JNeExpr) {
-                        condExpr = ctx.mkNot(ctx.mkEq(expr1, expr2));
-                    } else if (condition instanceof JLeExpr) {
-                        condExpr = ctx.mkLe(expr1, expr2);
-                    }
-                    int i = units.indexOf(unit);
-                    if (!units.get(i+1).equals(((JIfStmt) unit).getTarget())){
-                        condExpr = ctx.mkNot(condExpr);
-                    }
-                    constraints.add(condExpr);
-                } else if (condition instanceof UnopExpr) {
-
-                }
+                cnvJIfStmt((JIfStmt) unit, ctx, constraints, valueExprMap, units);
             }
         }
         System.out.println("");
     }
-    private static Expr parseJimp2Z3(Value value, Context ctx){
+
+
+    private static Expr parseJimp2Z3(Value value, Context ctx, Map<Value, Expr> valueExprMap){
+
         if(value instanceof BinopExpr){
+            Value op1 = ((BinopExpr) value).getOp1();
+            Value op2 = ((BinopExpr) value).getOp2();
+            Expr expr1 = (op1 instanceof Constant)?convConst(ctx, op1):valueExprMap.get(op1);
+            Expr expr2 = (op2 instanceof Constant)?convConst(ctx, op2):valueExprMap.get(op2);
+
             Value left = ((BinopExpr) value).getOp1();
             Value right = ((BinopExpr) value).getOp2();
             if(value instanceof JAddExpr){
-                return ctx.mkAdd(parseJimp2Z3(left, ctx), parseJimp2Z3(right, ctx));
+                return ctx.mkAdd(expr1, expr2);
             }
             else if(value instanceof JSubExpr){
-                return ctx.mkSub(parseJimp2Z3(left, ctx), parseJimp2Z3(right, ctx));
+                return ctx.mkSub(expr1, expr2);
             }
             else if(value instanceof JMulExpr){
-                return ctx.mkMul(parseJimp2Z3(left, ctx), parseJimp2Z3(right, ctx));
+                return ctx.mkMul(expr1, expr2);
             }
             else if(value instanceof JDivExpr){
-                return ctx.mkDiv(parseJimp2Z3(left, ctx), parseJimp2Z3(right, ctx));
+                return ctx.mkDiv(expr1, expr2);
             }
             else if(value instanceof JLeExpr){
-                return ctx.mkLe(parseJimp2Z3(left, ctx), parseJimp2Z3(right, ctx));
+                return ctx.mkLe(expr1, expr2);
             }
             else if(value instanceof JLtExpr){
-                return ctx.mkLt(parseJimp2Z3(left, ctx), parseJimp2Z3(right, ctx));
+                return ctx.mkLt(expr1, expr2);
             }
             else if(value instanceof JGeExpr){
-                return ctx.mkGe(parseJimp2Z3(left, ctx), parseJimp2Z3(right, ctx));
+                return ctx.mkGe(expr1, expr2);
             }
             else if(value instanceof JGtExpr){
-                return ctx.mkGt(parseJimp2Z3(left, ctx), parseJimp2Z3(right, ctx));
+                return ctx.mkGt(expr1, expr2);
             }
             else if(value instanceof JEqExpr){
-                return ctx.mkEq(parseJimp2Z3(left, ctx), parseJimp2Z3(right, ctx));
+                return ctx.mkEq(expr1, expr2);
             }
             else if(value instanceof JNeExpr){
-                return ctx.mkNot(ctx.mkEq(parseJimp2Z3(left, ctx), parseJimp2Z3(right, ctx)));
+                return ctx.mkNot(ctx.mkEq(expr1, expr2));
             }
             else if(value instanceof JAndExpr){
-                return ctx.mkAnd(parseJimp2Z3(left, ctx), parseJimp2Z3(right, ctx));
+                return ctx.mkAnd(expr1, expr2);
             } else if(value instanceof JOrExpr){
-                return ctx.mkOr(parseJimp2Z3(left, ctx), parseJimp2Z3(right, ctx));
+                return ctx.mkOr(expr1, expr2);
             } else if(value instanceof JXorExpr){
-                return ctx.mkXor(parseJimp2Z3(left, ctx), parseJimp2Z3(right, ctx));
+                return ctx.mkXor(expr1, expr2);
             }
         }
         else if(value instanceof UnopExpr){
-            Value value1 = ((UnopExpr) value).getOp();
+            Value op1 = ((UnopExpr) value).getOp();
+            Expr expr1 = (op1 instanceof Constant)?convConst(ctx, op1):valueExprMap.get(op1);
+
             if(value instanceof JNegExpr){
-                return ctx.mkNot(parseJimp2Z3(value1, ctx));
+                return ctx.mkNot(expr1);
             }
             else if(value instanceof JLengthExpr){
-                return ctx.mkLength(parseJimp2Z3(value1, ctx));
+                return ctx.mkLength(expr1);
             }
         }
-        else if(value instanceof JimpleLocal){
-            //do: 根据JimpleLocal的type选择用ctx来make什么基本变量
-            Type type = value.getType();
-            if(type instanceof ArrayType){
-                Type elementType = ((ArrayType) type).getElementType();
-                return ctx.mkConst(value.toString(),
-                        ctx.mkArraySort(ctx.getIntSort(), getSortType(elementType, ctx)));
-            }
-            else {
-                return ctx.mkConst(value.toString(), getSortType(type, ctx));
-            }
-        }
+//        else if(value instanceof JimpleLocal){
+//            //do: 根据JimpleLocal的type选择用ctx来make什么基本变量
+//            Type type = value.getType();
+//            if(type instanceof ArrayType){
+//                Type elementType = ((ArrayType) type).getElementType();
+//                return ctx.mkConst(value.toString(),
+//                    ctx.mkArraySort(ctx.getIntSort(), getSortType(elementType, ctx)));
+//            }
+//            else {
+//                return ctx.mkConst(value.toString(), getSortType(type, ctx));
+//            }
+//        }
         return null;
     }
 
-    public static BoolExpr parseIf(JIfStmt stmt, Context ctx, List<JAssignStmt> assignList){
-        Value value = stmt.getConditionBox().getValue();
-        if(value instanceof BinopExpr){
-            BinopExpr binopExpr = (BinopExpr) value;
-            Value leftValue = binopExpr.getOp1();
-            Value rightValue = binopExpr.getOp2();
-            leftValue = replaceValue(leftValue, assignList);
-            rightValue = replaceValue(rightValue, assignList);
-            ((BinopExpr) value).setOp1(leftValue);
-            ((BinopExpr) value).setOp2(rightValue);
+    private static void cnvJIfStmt(JIfStmt unit, Context ctx, Set<Expr> constraints, Map<Value, Expr> valueExprMap, List<Unit> units) {
+        JIfStmt stmt = (JIfStmt) unit;
+        Value condition = stmt.getCondition();
+        Expr condExpr = parseJimp2Z3(condition, ctx, valueExprMap);
+        int i = units.indexOf(unit);
+        if (!units.get(i+1).equals(((JIfStmt) unit).getTarget())){
+            condExpr = ctx.mkNot(condExpr);
         }
-        else if(value instanceof UnopExpr){
-            UnopExpr unopExpr = (UnopExpr) value;
-            ((UnopExpr) value).setOp(replaceValue(unopExpr.getOp(), assignList));
-        }
-
-        return null;
+        constraints.add(condExpr);
     }
+
 
 
     public static String solve(String str) throws Exception {
