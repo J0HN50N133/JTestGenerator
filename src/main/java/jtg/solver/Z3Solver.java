@@ -2,16 +2,14 @@ package jtg.solver;
 
 import com.microsoft.z3.*;
 import com.microsoft.z3.Context;
-import jdk.nashorn.internal.runtime.regexp.joni.constants.StringType;
+import com.microsoft.z3.Expr;
+import com.sun.xml.bind.v2.runtime.reflect.opt.Const;
+import jtg.utils.Path;
 import soot.*;
-import soot.jimple.BinopExpr;
-import soot.jimple.UnopExpr;
+import soot.jimple.*;
 import soot.jimple.internal.*;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public class Z3Solver {
 
@@ -23,12 +21,7 @@ public class Z3Solver {
                 //thisValue.toString().contains(jAssignStmt.getLeftOp().toString());
                 //todo:ljx
                 BinopExpr binopExpr = (BinopExpr) thisValue.clone();
-                if(binopExpr.getOp1().equals(jAssignStmt.getLeftOp())){
-                    binopExpr.setOp1(jAssignStmt.getRightOp());
-                }
-                if(binopExpr.getOp2().equals(jAssignStmt.getLeftOp())){
-                    binopExpr.setOp2(jAssignStmt.getRightOp());
-                }
+                JAddExpr binopExpr1 = (JAddExpr) binopExpr;
             }
             else if(thisValue instanceof UnopExpr){
                 UnopExpr unopExpr = (UnopExpr) thisValue.clone();
@@ -39,16 +32,83 @@ public class Z3Solver {
         }
         return thisValue;
     }
-    private static Sort getSortType(Type type, Context ctx){
+
+     static Sort getSortType(Type type, Context ctx){
         if(type instanceof ByteType || type instanceof IntType
                 || type instanceof LongType || type instanceof ShortType)
             return ctx.mkIntSort();
-        else if(type instanceof CharType || type instanceof StringType)
+        else if(type instanceof CharType)
             return ctx.mkStringSort();
         else if(type instanceof DoubleType || type instanceof FloatType)
             return ctx.mkFPSortDouble();
         else
             return null;
+    }
+
+    static Expr convConst(Context ctx, Value value) {
+        assert (value instanceof Constant);
+        if (value instanceof IntConstant) {
+            return ctx.mkInt(((IntConstant) value).value);
+        }
+        return null;
+    }
+    public static void calculatePathConstraint(Path path){
+        HashMap<String, String> cfg = new HashMap<String, String>();
+        cfg.put("model", "true");
+        Context ctx = new Context(cfg);
+        Map<Value, Value> valueMap = new HashMap<>();
+        Map<Value, Expr> valueExprMap = new HashMap<>();
+        Set<Expr> constraints = new HashSet<>();
+        List<Unit> units = path.getUnits();
+        for (Unit unit : units) {
+            if (unit instanceof JAssignStmt) {
+                JAssignStmt stmt = (JAssignStmt) unit;
+                Value left = stmt.getLeftOp();
+                Value right = stmt.getRightOp();
+//                valueMap.put(stmt.getLeftOp(), right);
+                if (right instanceof BinopExpr) {
+                    Value op1 = ((BinopExpr) right).getOp1();
+                    Value op2 = ((BinopExpr) right).getOp2();
+                    if (right instanceof JAddExpr) {
+                        valueExprMap.put(left, ctx.mkAdd(valueExprMap.get(op1), valueExprMap.get(op2)));
+                    }
+                } else if (right instanceof UnopExpr) {
+                } else if (right instanceof Constant) {
+                }
+            } else if (unit instanceof JIdentityStmt) {
+                JIdentityStmt stmt = (JIdentityStmt) unit;
+                Type type = stmt.getLeftOp().getType();
+                Sort sort = getSortType(type, ctx);
+                if (sort == null) continue;
+                // TODO: support Array
+                valueExprMap.put(stmt.getLeftOp(), ctx.mkConst(stmt.getLeftOp().toString() ,sort));
+            } else if (unit instanceof JIfStmt) {
+                JIfStmt stmt = (JIfStmt) unit;
+                Value condition = stmt.getCondition();
+                Expr condExpr = null;
+                if (condition instanceof BinopExpr) {
+                    Value op1 = ((BinopExpr) condition).getOp1();
+                    Value op2 = ((BinopExpr) condition).getOp2();
+                    Expr expr1 = (op1 instanceof Constant)?convConst(ctx, op1):valueExprMap.get(op1);
+                    Expr expr2 = (op2 instanceof Constant)?convConst(ctx, op2):valueExprMap.get(op2);
+                    if (condition instanceof JEqExpr) {
+                        condExpr = ctx.mkEq(expr1, expr2);
+                    } else if (condition instanceof JNeExpr) {
+                        condExpr = ctx.mkNot(ctx.mkEq(expr1, expr2));
+                    } else if (condition instanceof JLeExpr) {
+                        condExpr = ctx.mkLe(expr1, expr2);
+                    }
+                    int i = units.indexOf(unit);
+                    if (!units.get(i+1).equals(((JIfStmt) unit).getTarget())){
+                        condExpr = ctx.mkNot(condExpr);
+                    }
+                    constraints.add(condExpr);
+                } else if (condition instanceof UnopExpr) {
+
+                }
+            }
+        }
+        System.out.println("");
     }
     private static Expr parseJimp2Z3(Value value, Context ctx){
         if(value instanceof BinopExpr){
@@ -116,27 +176,27 @@ public class Z3Solver {
         return null;
     }
 
-    public static BoolExpr parseIf(JIfStmt stmt, Context ctx, List<JAssignStmt> asignList){
+    public static BoolExpr parseIf(JIfStmt stmt, Context ctx, List<JAssignStmt> assignList){
         Value value = stmt.getConditionBox().getValue();
         if(value instanceof BinopExpr){
             BinopExpr binopExpr = (BinopExpr) value;
             Value leftValue = binopExpr.getOp1();
             Value rightValue = binopExpr.getOp2();
-            leftValue = replaceValue(leftValue, asignList);
-            rightValue = replaceValue(rightValue, asignList);
+            leftValue = replaceValue(leftValue, assignList);
+            rightValue = replaceValue(rightValue, assignList);
             ((BinopExpr) value).setOp1(leftValue);
             ((BinopExpr) value).setOp2(rightValue);
         }
         else if(value instanceof UnopExpr){
             UnopExpr unopExpr = (UnopExpr) value;
-            ((UnopExpr) value).setOp(replaceValue(unopExpr.getOp(), asignList));
+            ((UnopExpr) value).setOp(replaceValue(unopExpr.getOp(), assignList));
         }
 
         return null;
     }
 
 
-   public static String solve(String str) throws Exception {
+    public static String solve(String str) throws Exception {
         Set<String> declareBools = new HashSet<>();
         Set<Expr> varList = new HashSet<>();
         ExpressionEvaluator expressionEvaluator = new ExpressionEvaluator();
@@ -169,5 +229,25 @@ public class Z3Solver {
             res.append(e);
         }
         return res.toString();
+    }
+
+    Expr converValueToZ3Expr(Context ctx, Value v, List<Unit> assignList) {
+        if (v instanceof soot.jimple.Expr) {
+        }else {
+            Type tp = v.getType();
+            if (tp instanceof RefType) {
+            } else if (tp instanceof ArrayType) {
+            } else if (tp instanceof PrimType) {
+            } else if (tp instanceof ByteType) {
+            } else if (tp instanceof CharType) {
+            } else if (tp instanceof DoubleType) {
+            } else if (tp instanceof FloatType) {
+            } else if (tp instanceof LongType) {
+            } else if (tp instanceof ShortType) {
+            } else if (tp instanceof BooleanType) {
+            } else {
+            }
+        }
+        return null;
     }
 }

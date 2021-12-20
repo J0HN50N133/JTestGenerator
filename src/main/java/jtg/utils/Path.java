@@ -1,4 +1,4 @@
-package jtg.Utils;
+package jtg.utils;
 
 import jtg.solver.Z3Solver;
 import soot.Unit;
@@ -19,13 +19,13 @@ public class Path {
     // the UnitGraph this Path belong to
     private UnitGraph ug;
 
-    public Path(Path src){
+    public Path(Path src) {
         this.units = new LinkedList<>(src.getUnits());
         this.expectRes = src.expectRes;
         this.ug = src.ug;
     }
 
-    public Path(List<Unit> units){
+    public Path(List<Unit> units) {
         this.units = units;
     }
 
@@ -35,14 +35,14 @@ public class Path {
 
     @Override
     public String toString() {
-       StringBuilder sb = new StringBuilder();
-       for(Unit unit: units){
-           sb.append(unit.toString()).append("\n");
-       }
-       return sb.toString();
+        StringBuilder sb = new StringBuilder();
+        for (Unit unit : units) {
+            sb.append(unit.toString()).append("\n");
+        }
+        return sb.toString();
     }
 
-    public String solve(){
+    public String solve() {
         try {
             return Z3Solver.solve(calPathConstraint());
         } catch (Exception e) {
@@ -54,17 +54,17 @@ public class Path {
     // 把Jimple生成的变量递归替换回原有变量
     private static final Pattern p = Pattern.compile("\\$[a-z]+[0-9]+");
     private String washVariable(Map<String, String> assignList, String cond) {
-        if (cond.contains("$")){
+        if (cond.contains("$")) {
             StringBuilder afterWash = new StringBuilder();
             String[] strArr = cond.split(" ");
-            for(int i = 0; i<strArr.length; ++i){
+            for (int i = 0; i < strArr.length; ++i) {
                 String str = strArr[i];
-                if(str.startsWith("$")){
+                if (str.startsWith("$")) {
                     strArr[i] = assignList.get(str.trim());
-                }else if(str.contains("$")){
+                } else if (str.contains("$")) {
                     Matcher m = p.matcher(str);
                     String leftOp = "";
-                    if(m.find()){
+                    if (m.find()) {
                         leftOp = m.group(0);
                     }
                     String replacement = assignList.get(leftOp).replaceAll("\\$", "RGX_CHAR_DOLLAR");// encode replacement;
@@ -79,19 +79,6 @@ public class Path {
         return cond;
     }
 
-    public void collectPathConstraint(){
-        List<Unit> pathConstraint = new LinkedList<>();
-        List<Unit> assignList = new LinkedList<>();
-        for (Unit unit : units) {
-            if (unit instanceof JIfStmt) {
-                JIfStmt ifStmt = (JIfStmt) unit;
-                pathConstraint.add(unit);
-            }
-            if (unit instanceof JAssignStmt) {
-                assignList.add(unit);
-            }
-        }
-    }
 
     public String calPathConstraint() {
 
@@ -121,15 +108,15 @@ public class Path {
                 stepConditionsWithJimpleVars.add(ifstms);
                 continue;
             }
-            if (stmt instanceof JReturnStmt){
+            if (stmt instanceof JReturnStmt) {
                 expectRes = washVariable(assignList, ((JReturnStmt) stmt).getOp().toString());
             }
         }
 
         //bug 没有考虑jVars为空的情况
-       //把所有生成的中间变量用参数来表示
+        //把所有生成的中间变量用参数来表示
         for (String cond : stepConditionsWithJimpleVars) {
-                stepConditions.add(washVariable(assignList, cond));
+            stepConditions.add(washVariable(assignList, cond));
         }
 
 
