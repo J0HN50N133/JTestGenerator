@@ -315,7 +315,8 @@ public class Z3Solver {
         try {
             String status = s.check().toString();
             if (status.equals("SATISFIABLE")) {
-                res.append(s.getModel().toString());
+                String result = cnvModelToReadable(ctx, s.getModel(), path);
+                res.append(result);
             } else {
                 res.append("Unfeasible");//无解
             }
@@ -326,4 +327,30 @@ public class Z3Solver {
         return res.toString();
     }
 
+    private static String cnvModelToReadable(Context ctx, Model model, Path path) {
+        StringBuilder sb = new StringBuilder();
+        for (Unit unit : path.getUnits()) {
+            if (unit instanceof JIdentityStmt) {
+                Value rightOp = ((JIdentityStmt) unit).getRightOp();
+                if (rightOp instanceof ParameterRef) {
+                    ParameterRef param = (ParameterRef) rightOp;
+                    Expr expr = cnvJIdentityStmt(ctx, (JIdentityStmt) unit);
+                    Expr eval = model.eval(expr, true);
+                    sb
+                      .append("\n")
+                      .append("@parameter")
+                      .append(param.getIndex())
+                      .append(": ")
+                      .append(eval);
+                }
+            }
+        }
+        return sb.toString();
+    }
+    private String cnvZ3ExprToString(Expr expr){
+        if (expr.isBool()) {
+            return expr.toString();
+        }
+        return "";
+    }
 }
