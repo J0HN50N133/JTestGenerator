@@ -23,6 +23,14 @@ public class Z3Solver {
         } else if (type instanceof ArrayType) {
             Type elementType = ((ArrayType) type).getElementType();
             return ctx.mkSeqSort(getSortType(elementType, ctx));
+        } else if (type instanceof RefType) {
+            String className = ((RefType) type).getClassName();
+            switch (className){
+            case "java.lang.String":
+                return ctx.getStringSort();
+            default:
+                return null;
+            }
         }
             return null;
     }
@@ -219,9 +227,67 @@ public class Z3Solver {
             Value index = ((JArrayRef) value).getIndex();
             Expr expr1 = getExpr(ctx, base, valueExprMap);
             Expr expr2 = getExpr(ctx, index, valueExprMap);
-            return ctx.mkExtract(expr1, expr2, ctx.mkInt(1));
+            return ctx.mkNth(expr1, expr2);
+        } else if (value instanceof JVirtualInvokeExpr) {
+            Value base = ((JVirtualInvokeExpr) value).getBase();
+            String className = base.getType().toString();
+            if (className.equals("java.lang.String")) {
+                return cnvStringMethod(ctx, value, valueExprMap);
+            }
         }
         return null;
+    }
+
+    private static Expr cnvStringMethod(Context ctx, Value value, Map<Value, Expr> valueExprMap) {
+        JVirtualInvokeExpr invokeExpr = (JVirtualInvokeExpr) value;
+        Value base = invokeExpr.getBase();
+        SootMethod method = invokeExpr.getMethod();
+        String stringMtdName = method.getName();
+        switch (stringMtdName) {
+        case "length":
+            return ctx.mkLength(getExpr(ctx, base, valueExprMap));
+        case "substring":
+            return ctx.mkExtract(
+                    getExpr(ctx, base, valueExprMap),
+                    getExpr(ctx, invokeExpr.getArg(0), valueExprMap),
+                    ctx.mkSub(
+                            getExpr(ctx, invokeExpr.getArg(1), valueExprMap),
+                            ctx.mkInt(1)));
+        case "equals":
+            return ctx.mkEq(
+                    getExpr(ctx, base, valueExprMap),
+                    getExpr(ctx, invokeExpr.getArg(0), valueExprMap));
+        case "contains":
+            return ctx.mkContains(
+                    getExpr(ctx, base, valueExprMap),
+                    getExpr(ctx, invokeExpr.getArg(0), valueExprMap));
+        case "indexOf":
+            if (invokeExpr.getArgCount() == 1 && invokeExpr.getArg(0).getType() instanceof RefType) {
+                return ctx.mkIndexOf(
+                        getExpr(ctx, base, valueExprMap),
+                        getExpr(ctx, invokeExpr.getArg(0), valueExprMap),
+                        ctx.mkInt(0));
+            } else if (invokeExpr.getArgCount() == 2
+                    && invokeExpr.getArg(0).getType() instanceof RefType
+                    && invokeExpr.getArg(1) instanceof IntConstant) {
+                return ctx.mkIndexOf(
+                        getExpr(ctx, base, valueExprMap),
+                        getExpr(ctx, invokeExpr.getArg(0), valueExprMap),
+                        getExpr(ctx, invokeExpr.getArg(1), valueExprMap));
+            }
+        case "startsWith":
+            if (invokeExpr.getArgCount() == 1){
+                return ctx.mkPrefixOf(
+                        getExpr(ctx, base, valueExprMap),
+                        getExpr(ctx, invokeExpr.getArg(0), valueExprMap));
+            }
+        case "endsWith":
+            return ctx.mkSuffixOf(
+                    getExpr(ctx, base, valueExprMap),
+                    getExpr(ctx, invokeExpr.getArg(0), valueExprMap));
+        default:
+            return null;
+        }
     }
 
     private static Expr cnvJIfStmt(JIfStmt unit, Context ctx, Map<Value, Expr> valueExprMap, List<Unit> units) {
