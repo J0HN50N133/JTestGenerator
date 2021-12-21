@@ -12,50 +12,51 @@ import java.util.*;
 
 public class Z3Solver {
 
-    private static Value replaceValue(Value value, List<JAssignStmt> assignList) {
-        //替换掉局部变量
-        Value thisValue = (Value) value.clone();
-        for (JAssignStmt jAssignStmt : assignList) {
-            if(thisValue instanceof BinopExpr){
-                //thisValue.toString().contains(jAssignStmt.getLeftOp().toString());
-                //todo:ljx
-                BinopExpr binopExpr = (BinopExpr) thisValue.clone();
-                JAddExpr binopExpr1 = (JAddExpr) binopExpr;
-            }
-            else if(thisValue instanceof UnopExpr){
-                UnopExpr unopExpr = (UnopExpr) thisValue.clone();
-                if(unopExpr.getOp().equals(jAssignStmt.getLeftOp())){
-                    unopExpr.setOp(jAssignStmt.getRightOp());
-                }
-            }
-        }
-        return thisValue;
-    }
-
-     static Sort getSortType(Type type, Context ctx){
-        if(type instanceof ByteType || type instanceof IntType
-                || type instanceof LongType || type instanceof ShortType)
+    static Sort getSortType(Type type, Context ctx){
+        if (type instanceof ByteType || type instanceof IntType
+                || type instanceof LongType || type instanceof ShortType || type instanceof CharType) {
             return ctx.mkIntSort();
-        else if(type instanceof CharType)
-            return ctx.mkStringSort();
-        else if(type instanceof DoubleType || type instanceof FloatType)
+        } else if (type instanceof DoubleType || type instanceof FloatType) {
             return ctx.mkFPSortDouble();
-        else
+        } else if (type instanceof BooleanType) {
+            return ctx.mkBoolSort();
+        } else if (type instanceof ArrayType) {
+            Type elementType = ((ArrayType) type).getElementType();
+            return ctx.mkArraySort(ctx.mkIntSort(), getSortType(elementType, ctx));
+        }
             return null;
     }
 
-    static Expr convConst(Context ctx, Value value) {
+    static Expr cnvConst(Context ctx, Value value) {
         assert (value instanceof Constant);
         if (value instanceof IntConstant) {
             return ctx.mkInt(((IntConstant) value).value);
+        } else if (value instanceof FloatConstant) {
+            return ctx.mkFP(((FloatConstant) value).value, ctx.mkFPSortDouble());
+        } else if (value instanceof DoubleConstant){
+            return ctx.mkFP(((DoubleConstant) value).value, ctx.mkFPSortDouble());
+        } else if (value instanceof StringConstant) {
+            return ctx.mkString(((StringConstant) value).value);
+        } else if (value instanceof LongConstant) {
+            return ctx.mkInt(((LongConstant) value).value);
         }
         return null;
     }
-    public static void calculatePathConstraint(Path path){
-        HashMap<String, String> cfg = new HashMap<String, String>();
-        cfg.put("model", "true");
-        Context ctx = new Context(cfg);
-        Map<Value, Value> valueMap = new HashMap<>();
+
+    private static Expr getExpr(Context ctx, Value value, Map<Value, Expr> valueExprMap) {
+        return value instanceof Constant ? cnvConst(ctx, value) : valueExprMap.get(value);
+    }
+    private static Expr cnvJAssignStmt(Context ctx, JAssignStmt stmt, Map<Value, Expr> valueExprMap){
+        Value right = stmt.getRightOp();
+        return parseJimp2Z3(right, ctx, valueExprMap);
+    }
+    private static Expr cnvJIdentityStmt(Context ctx, JIdentityStmt stmt){
+        Type type = stmt.getLeftOp().getType();
+        Sort sort = getSortType(type, ctx);
+        if (sort == null) return null;
+        return ctx.mkConst(stmt.getLeftOp().toString() ,sort);
+    }
+    public static Set<Expr> calculatePathConstraint(Context ctx, Path path){
         Map<Value, Expr> valueExprMap = new HashMap<>();
         Set<Expr> constraints = new HashSet<>();
         List<Unit> units = path.getUnits();
@@ -63,107 +64,153 @@ public class Z3Solver {
             if (unit instanceof JAssignStmt) {
                 JAssignStmt stmt = (JAssignStmt) unit;
                 Value left = stmt.getLeftOp();
-                Value right = stmt.getRightOp();
-//                valueMap.put(stmt.getLeftOp(), right);
-                if (right instanceof BinopExpr) {
-                    Value op1 = ((BinopExpr) right).getOp1();
-                    Value op2 = ((BinopExpr) right).getOp2();
-                    if (right instanceof JAddExpr) {
-                        valueExprMap.put(left, ctx.mkAdd(valueExprMap.get(op1), valueExprMap.get(op2)));
-                    }
-                } else if (right instanceof UnopExpr) {
-                } else if (right instanceof Constant) {
-                }
+                valueExprMap.put(left,  cnvJAssignStmt(ctx, stmt, valueExprMap));
             } else if (unit instanceof JIdentityStmt) {
                 JIdentityStmt stmt = (JIdentityStmt) unit;
-                Type type = stmt.getLeftOp().getType();
-                Sort sort = getSortType(type, ctx);
-                if (sort == null) continue;
-                // TODO: support Array
-                valueExprMap.put(stmt.getLeftOp(), ctx.mkConst(stmt.getLeftOp().toString() ,sort));
+                Value left = stmt.getLeftOp();
+                Expr identity = cnvJIdentityStmt(ctx, stmt);
+                if (identity == null) continue;
+                valueExprMap.put(left, identity);
             } else if (unit instanceof JIfStmt) {
-                cnvJIfStmt((JIfStmt) unit, ctx, constraints, valueExprMap, units);
+                Expr condExpr = cnvJIfStmt((JIfStmt) unit, ctx, valueExprMap, units);
+                constraints.add(condExpr);
             }
         }
-        System.out.println("");
+        return constraints;
     }
 
+    static class ExprPair{
+        Expr expr1;
+        Expr expr2;
+        boolean isFP;
+
+        public ExprPair(Expr expr1, Expr expr2, boolean isFP) {
+            this.expr1 = expr1;
+            this.expr2 = expr2;
+            this.isFP = isFP;
+        }
+    }
+
+    private static ExprPair dealWithFP(Context ctx, Value value, Map<Value, Expr> valueExprMap) {
+        Value op1 = ((BinopExpr) value).getOp1();
+        Value op2 = ((BinopExpr) value).getOp2();
+        Expr expr1 = getExpr(ctx, op1, valueExprMap);
+        Expr expr2 = getExpr(ctx, op2, valueExprMap);
+        boolean isFP = false;
+        if ((!expr1.isInt()) && (op2 instanceof IntConstant)) {
+            expr2 = cnvConst(ctx, DoubleConstant.v((double) ((IntConstant) op2).value));
+            isFP = true;
+        }
+        return new ExprPair(expr1, expr2, isFP);
+    }
+    private static Expr dealWithEq(Context ctx, Value value, Map<Value, Expr> valueExprMap){
+        ExprPair exprPair = dealWithFP(ctx, value, valueExprMap);
+        Expr expr1 = exprPair.expr1;
+        Expr expr2 = exprPair.expr2;
+        if (exprPair.isFP){
+            return ctx.mkFPEq(expr1, expr2);
+        }
+        return ctx.mkEq(expr1, expr2);
+    }
+
+    private static Expr dealWithCmpOp(Context ctx, Value value, Map<Value, Expr> valueExprMap) {
+        ExprPair exprPair = dealWithFP(ctx, value, valueExprMap);
+        Expr expr1 = exprPair.expr1;
+        Expr expr2 = exprPair.expr2;
+        if (exprPair.isFP) {
+            if (value instanceof JLeExpr) {
+                return ctx.mkFPLEq(expr1, expr2);
+            } else if (value instanceof JLtExpr) {
+                return ctx.mkFPLt(expr1, expr2);
+            } else if (value instanceof JGeExpr) {
+                return ctx.mkFPGEq(expr1, expr2);
+            } else if (value instanceof JGtExpr) {
+                return ctx.mkFPGt(expr1, expr2);
+            } else if (value instanceof JEqExpr) {
+                return dealWithEq(ctx, value, valueExprMap);
+            } else if (value instanceof JNeExpr) {
+                return ctx.mkNot(dealWithEq(ctx, value, valueExprMap));
+            }
+        }else {
+            if (value instanceof JLeExpr) {
+                return ctx.mkLe(expr1, expr2);
+            } else if (value instanceof JLtExpr) {
+                return ctx.mkLt(expr1, expr2);
+            } else if (value instanceof JGeExpr) {
+                return ctx.mkGe(expr1, expr2);
+            } else if (value instanceof JGtExpr) {
+                return ctx.mkGt(expr1, expr2);
+            } else if (value instanceof JEqExpr) {
+                return dealWithEq(ctx, value, valueExprMap);
+            } else if (value instanceof JNeExpr) {
+                return ctx.mkNot(dealWithEq(ctx, value, valueExprMap));
+            }
+        }
+        return null;
+    }
 
     private static Expr parseJimp2Z3(Value value, Context ctx, Map<Value, Expr> valueExprMap){
 
         if(value instanceof BinopExpr){
             Value op1 = ((BinopExpr) value).getOp1();
             Value op2 = ((BinopExpr) value).getOp2();
-            Expr expr1 = (op1 instanceof Constant)?convConst(ctx, op1):valueExprMap.get(op1);
-            Expr expr2 = (op2 instanceof Constant)?convConst(ctx, op2):valueExprMap.get(op2);
+            Expr expr1 = getExpr(ctx, op1, valueExprMap);
+            Expr expr2 = getExpr(ctx, op2, valueExprMap);
 
-            Value left = ((BinopExpr) value).getOp1();
-            Value right = ((BinopExpr) value).getOp2();
             if(value instanceof JAddExpr){
                 return ctx.mkAdd(expr1, expr2);
-            }
-            else if(value instanceof JSubExpr){
+            } else if(value instanceof JSubExpr){
                 return ctx.mkSub(expr1, expr2);
-            }
-            else if(value instanceof JMulExpr){
+            } else if(value instanceof JMulExpr){
                 return ctx.mkMul(expr1, expr2);
-            }
-            else if(value instanceof JDivExpr){
+            } else if(value instanceof JDivExpr){
                 return ctx.mkDiv(expr1, expr2);
-            }
-            else if(value instanceof JLeExpr){
-                return ctx.mkLe(expr1, expr2);
-            }
-            else if(value instanceof JLtExpr){
-                return ctx.mkLt(expr1, expr2);
-            }
-            else if(value instanceof JGeExpr){
-                return ctx.mkGe(expr1, expr2);
-            }
-            else if(value instanceof JGtExpr){
-                return ctx.mkGt(expr1, expr2);
-            }
-            else if(value instanceof JEqExpr){
-                return ctx.mkEq(expr1, expr2);
-            }
-            else if(value instanceof JNeExpr){
-                return ctx.mkNot(ctx.mkEq(expr1, expr2));
-            }
-            else if(value instanceof JAndExpr){
+            }else if (value instanceof JRemExpr) {
+                return ctx.mkRem(expr1, expr2);
+            } else if(value instanceof JLeExpr
+                    || value instanceof JLtExpr
+                    || value instanceof JGeExpr
+                    || value instanceof JGtExpr
+                    || value instanceof JEqExpr
+                    || value instanceof JNeExpr
+            ){
+                return dealWithCmpOp(ctx, value, valueExprMap);
+            } else if(value instanceof JAndExpr){
                 return ctx.mkAnd(expr1, expr2);
             } else if(value instanceof JOrExpr){
                 return ctx.mkOr(expr1, expr2);
             } else if(value instanceof JXorExpr){
                 return ctx.mkXor(expr1, expr2);
+            } else if (value instanceof JShlExpr) {
+                return ctx.mkMul(expr1, ctx.mkPower(ctx.mkInt(2), expr2));
+            } else if (value instanceof JShrExpr) {
+                return ctx.mkDiv(expr1, ctx.mkPower(ctx.mkInt(2), expr2));
+            } else if (value instanceof JCmpExpr){
+                return ctx.mkSub(expr1, expr2);
+            } else if (value instanceof JCmplExpr || value instanceof JCmpgExpr){
+                FPExpr fpSub = ctx.mkFPSub(ctx.mkFPRoundNearestTiesToAway(), expr1, expr2);
+                return ctx.mkFPRoundToIntegral(ctx.mkFPRoundNearestTiesToEven(), fpSub);
             }
-        }
-        else if(value instanceof UnopExpr){
-            Value op1 = ((UnopExpr) value).getOp();
-            Expr expr1 = (op1 instanceof Constant)?convConst(ctx, op1):valueExprMap.get(op1);
+        } else if(value instanceof UnopExpr){
+            Value op = ((UnopExpr) value).getOp();
+            Expr expr = getExpr(ctx, op, valueExprMap);
 
             if(value instanceof JNegExpr){
-                return ctx.mkNot(expr1);
+                return ctx.mkNot(expr);
+            } else if(value instanceof JLengthExpr){
+                return ctx.mkLength(expr);
             }
-            else if(value instanceof JLengthExpr){
-                return ctx.mkLength(expr1);
-            }
+        } else if(value instanceof JimpleLocal){
+            return getExpr(ctx, value, valueExprMap);
+        } else if(value instanceof Constant){
+            return cnvConst(ctx, value);
+        } else if (value instanceof JCastExpr) {
+            return getExpr(ctx, ((JCastExpr) value).getOp(), valueExprMap);
         }
-//        else if(value instanceof JimpleLocal){
-//            //do: 根据JimpleLocal的type选择用ctx来make什么基本变量
-//            Type type = value.getType();
-//            if(type instanceof ArrayType){
-//                Type elementType = ((ArrayType) type).getElementType();
-//                return ctx.mkConst(value.toString(),
-//                    ctx.mkArraySort(ctx.getIntSort(), getSortType(elementType, ctx)));
-//            }
-//            else {
-//                return ctx.mkConst(value.toString(), getSortType(type, ctx));
-//            }
-//        }
         return null;
     }
 
-    private static void cnvJIfStmt(JIfStmt unit, Context ctx, Set<Expr> constraints, Map<Value, Expr> valueExprMap, List<Unit> units) {
+    private static Expr cnvJIfStmt(JIfStmt unit, Context ctx, Map<Value, Expr> valueExprMap, List<Unit> units) {
         JIfStmt stmt = (JIfStmt) unit;
         Value condition = stmt.getCondition();
         Expr condExpr = parseJimp2Z3(condition, ctx, valueExprMap);
@@ -171,10 +218,33 @@ public class Z3Solver {
         if (!units.get(i+1).equals(((JIfStmt) unit).getTarget())){
             condExpr = ctx.mkNot(condExpr);
         }
-        constraints.add(condExpr);
+        return condExpr;
     }
 
 
+    public static String solve(Path path) throws Exception {
+        HashMap<String, String> cfg = new HashMap<String, String>();
+        cfg.put("model", "true");
+        Context ctx = new Context(cfg);
+        Set<Expr> constraint = calculatePathConstraint(ctx, path);
+        Solver s = ctx.mkSolver();
+        for (Expr expr : constraint) {
+            s.add(expr);
+        }
+        StringBuilder res = new StringBuilder();
+        try {
+            String status = s.check().toString();
+            if (status.equals("SATISFIABLE")) {
+                res.append(s.getModel().toString());
+            } else {
+                res.append("");//无解
+            }
+
+        }catch (Exception e){
+            res.append(e);
+        }
+        return res.toString();
+    }
 
     public static String solve(String str) throws Exception {
         Set<String> declareBools = new HashSet<>();
@@ -211,23 +281,4 @@ public class Z3Solver {
         return res.toString();
     }
 
-    Expr converValueToZ3Expr(Context ctx, Value v, List<Unit> assignList) {
-        if (v instanceof soot.jimple.Expr) {
-        }else {
-            Type tp = v.getType();
-            if (tp instanceof RefType) {
-            } else if (tp instanceof ArrayType) {
-            } else if (tp instanceof PrimType) {
-            } else if (tp instanceof ByteType) {
-            } else if (tp instanceof CharType) {
-            } else if (tp instanceof DoubleType) {
-            } else if (tp instanceof FloatType) {
-            } else if (tp instanceof LongType) {
-            } else if (tp instanceof ShortType) {
-            } else if (tp instanceof BooleanType) {
-            } else {
-            }
-        }
-        return null;
-    }
 }

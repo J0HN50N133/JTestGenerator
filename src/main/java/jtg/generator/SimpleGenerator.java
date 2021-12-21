@@ -74,16 +74,23 @@ public class SimpleGenerator {
             Set<Path> primePaths = calculatePrimePath();
             List<Path> testPaths = calculateTestPath(primePaths);
             for (Path testPath : testPaths) {
-                System.out.println("The path is: \n" + testPath);
-                pathConstraint = testPath.calPathConstraint();
-                //如果路径约束为空字符串，表示路径约束为恒真
-                if (pathConstraint.isEmpty())
+                String solve = Z3Solver.solve(testPath);
+                if (solve.isEmpty()) {
                     testSet.add(randomTC(body.getParameterLocals()));
-                System.out.println("The corresponding path constraint is: " + pathConstraint);
-                if (!pathConstraint.isEmpty()){
-                    testSet.add(solve(pathConstraint));//!( i0 <= 0 )
+                }else {
+                    testSet.add(solve);//!( i0 <= 0 )
                 }
-
+//                System.out.println(solve);
+//                System.out.println("The path is: \n" + testPath);
+//                pathConstraint = testPath.calPathConstraint();
+//                //如果路径约束为空字符串，表示路径约束为恒真
+//                if (pathConstraint.isEmpty())
+//                    testSet.add(randomTC(body.getParameterLocals()));
+//                System.out.println("The corresponding path constraint is: " + pathConstraint);
+//                if (!pathConstraint.isEmpty()){
+//                    testSet.add(solve(pathConstraint));//!( i0 <= 0 )
+//                }
+//
                 expectResSet.add(testPath.getExpectRes());
             }
         } catch (Exception e) {
@@ -94,7 +101,7 @@ public class SimpleGenerator {
             System.out.println();
             System.out.println("The generated test case inputs:");
             for (int count = 0; count < testSet.size(); ++count) {
-                System.out.printf("(%d) %s, expected result: %s\n", count+1, testSet.get(count), expectResSet.get(count));
+                System.out.printf("(%d) %s\n", count+1, testSet.get(count));
             }
         }
         return testSet;
