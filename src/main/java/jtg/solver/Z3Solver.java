@@ -22,7 +22,7 @@ public class Z3Solver {
             return ctx.mkBoolSort();
         } else if (type instanceof ArrayType) {
             Type elementType = ((ArrayType) type).getElementType();
-            return ctx.mkArraySort(ctx.mkIntSort(), getSortType(elementType, ctx));
+            return ctx.mkSeqSort(getSortType(elementType, ctx));
         }
             return null;
     }
@@ -79,45 +79,53 @@ public class Z3Solver {
         return constraints;
     }
 
+    private enum PairType { IntInt, FPInt, BoolInt }
     static class ExprPair{
         Expr expr1;
         Expr expr2;
-        boolean isFP;
-
-        public ExprPair(Expr expr1, Expr expr2, boolean isFP) {
+        PairType pairType;
+        public ExprPair(Expr expr1, Expr expr2, PairType pairType) {
             this.expr1 = expr1;
             this.expr2 = expr2;
-            this.isFP = isFP;
+            this.pairType = pairType;
         }
     }
 
-    private static ExprPair dealWithFP(Context ctx, Value value, Map<Value, Expr> valueExprMap) {
+    private static ExprPair dealWithType(Context ctx, Value value, Map<Value, Expr> valueExprMap) {
         Value op1 = ((BinopExpr) value).getOp1();
         Value op2 = ((BinopExpr) value).getOp2();
         Expr expr1 = getExpr(ctx, op1, valueExprMap);
         Expr expr2 = getExpr(ctx, op2, valueExprMap);
-        boolean isFP = false;
-        if ((!expr1.isInt()) && (op2 instanceof IntConstant)) {
+        PairType pairType = PairType.IntInt;
+        if (expr1.isBool() && (op2 instanceof IntConstant)) {
+            int intValue = ((IntConstant) op2).value;
+            if (intValue == 1) {
+                expr2 = ctx.mkTrue();
+            } else if (intValue == 0) {
+                expr2 = ctx.mkFalse();
+            }
+            pairType = PairType.BoolInt;
+        }else if ((!expr1.isInt()) && (op2 instanceof IntConstant)) {
             expr2 = cnvConst(ctx, DoubleConstant.v((double) ((IntConstant) op2).value));
-            isFP = true;
+            pairType = PairType.FPInt;
         }
-        return new ExprPair(expr1, expr2, isFP);
+        return new ExprPair(expr1, expr2, pairType);
     }
     private static Expr dealWithEq(Context ctx, Value value, Map<Value, Expr> valueExprMap){
-        ExprPair exprPair = dealWithFP(ctx, value, valueExprMap);
+        ExprPair exprPair = dealWithType(ctx, value, valueExprMap);
         Expr expr1 = exprPair.expr1;
         Expr expr2 = exprPair.expr2;
-        if (exprPair.isFP){
+        if (exprPair.pairType == PairType.FPInt){
             return ctx.mkFPEq(expr1, expr2);
         }
         return ctx.mkEq(expr1, expr2);
     }
 
     private static Expr dealWithCmpOp(Context ctx, Value value, Map<Value, Expr> valueExprMap) {
-        ExprPair exprPair = dealWithFP(ctx, value, valueExprMap);
+        ExprPair exprPair = dealWithType(ctx, value, valueExprMap);
         Expr expr1 = exprPair.expr1;
         Expr expr2 = exprPair.expr2;
-        if (exprPair.isFP) {
+        if (exprPair.pairType == PairType.FPInt) {
             if (value instanceof JLeExpr) {
                 return ctx.mkFPLEq(expr1, expr2);
             } else if (value instanceof JLtExpr) {
@@ -206,6 +214,12 @@ public class Z3Solver {
             return cnvConst(ctx, value);
         } else if (value instanceof JCastExpr) {
             return getExpr(ctx, ((JCastExpr) value).getOp(), valueExprMap);
+        } else if (value instanceof JArrayRef) {
+            Value base = ((JArrayRef) value).getBase();
+            Value index = ((JArrayRef) value).getIndex();
+            Expr expr1 = getExpr(ctx, base, valueExprMap);
+            Expr expr2 = getExpr(ctx, index, valueExprMap);
+            return ctx.mkExtract(expr1, expr2, ctx.mkInt(1));
         }
         return null;
     }
@@ -237,42 +251,7 @@ public class Z3Solver {
             if (status.equals("SATISFIABLE")) {
                 res.append(s.getModel().toString());
             } else {
-                res.append("");//无解
-            }
-
-        }catch (Exception e){
-            res.append(e);
-        }
-        return res.toString();
-    }
-
-    public static String solve(String str) throws Exception {
-        Set<String> declareBools = new HashSet<>();
-        Set<Expr> varList = new HashSet<>();
-        ExpressionEvaluator expressionEvaluator = new ExpressionEvaluator();
-        String asserts = expressionEvaluator.buildExpression(str, declareBools);
-        HashMap<String, String> cfg = new HashMap<String, String>();
-        cfg.put("model", "true");
-        Context ctx = new Context(cfg);
-        Solver s = ctx.mkSolver();
-        StringBuilder exprs = new StringBuilder();
-        for (String expr : declareBools){
-            exprs.append(expr);
-            String temp = expr.replaceAll("\\(declare-const ", "").replaceAll(" Real\\)","");
-            varList.add(ctx.mkRealConst(temp));
-        }
-        BoolExpr boolExpr = ctx.parseSMTLIB2String(exprs.toString()+asserts,null,null,null,null)[0];
-        s.add(boolExpr);
-
-        StringBuilder res = new StringBuilder();
-        try {
-            String status = s.check().toString();
-            if (status.equals("SATISFIABLE")) {
-                for (Expr var : varList) {
-                    res.append(var + "=" + s.getModel().eval(var, false) + " ");
-                }
-            } else {
-                res.append("");//无解
+                res.append("Unfeasible");//无解
             }
 
         }catch (Exception e){

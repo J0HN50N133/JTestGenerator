@@ -44,7 +44,7 @@ public class Path {
 
     public String solve() {
         try {
-            return Z3Solver.solve(calPathConstraint());
+            return Z3Solver.solve(this);
         } catch (Exception e) {
             e.printStackTrace();
             return null;

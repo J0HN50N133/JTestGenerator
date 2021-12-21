@@ -74,23 +74,8 @@ public class SimpleGenerator {
             Set<Path> primePaths = calculatePrimePath();
             List<Path> testPaths = calculateTestPath(primePaths);
             for (Path testPath : testPaths) {
-                String solve = Z3Solver.solve(testPath);
-                if (solve.isEmpty()) {
-                    testSet.add(randomTC(body.getParameterLocals()));
-                }else {
-                    testSet.add(solve);//!( i0 <= 0 )
-                }
-//                System.out.println(solve);
-//                System.out.println("The path is: \n" + testPath);
-//                pathConstraint = testPath.calPathConstraint();
-//                //如果路径约束为空字符串，表示路径约束为恒真
-//                if (pathConstraint.isEmpty())
-//                    testSet.add(randomTC(body.getParameterLocals()));
-//                System.out.println("The corresponding path constraint is: " + pathConstraint);
-//                if (!pathConstraint.isEmpty()){
-//                    testSet.add(solve(pathConstraint));//!( i0 <= 0 )
-//                }
-//
+                String solve = testPath.solve();
+                testSet.add(solve);//!( i0 <= 0 )
                 expectResSet.add(testPath.getExpectRes());
             }
         } catch (Exception e) {
@@ -105,10 +90,6 @@ public class SimpleGenerator {
             }
         }
         return testSet;
-    }
-
-    public String solve(String pathConstraint) throws Exception {//根据路径生成测试用例
-        return Z3Solver.solve(pathConstraint);
     }
 
     public String randomTC(List<Local> parameters) { //此时路径对于变量没有要求,可以随机赋值变量
