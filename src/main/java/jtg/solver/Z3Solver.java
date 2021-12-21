@@ -337,20 +337,37 @@ public class Z3Solver {
                     Expr expr = cnvJIdentityStmt(ctx, (JIdentityStmt) unit);
                     Expr eval = model.eval(expr, true);
                     sb
-                      .append("\n")
-                      .append("@parameter")
-                      .append(param.getIndex())
-                      .append(": ")
-                      .append(eval);
+                            .append("\n")
+                            .append("@parameter")
+                            .append(param.getIndex())
+                            .append(": ");
+                    if (param.getType() instanceof ArrayType) {
+                        sb.append("new ")
+                                .append(rightOp.getType())
+                                .append("{");
+                    }
+                    sb.append(cnvZ3ExprToString(eval));
+                    if (param.getType() instanceof ArrayType) {
+                        sb.append("}");
+                    }
                 }
             }
         }
         return sb.toString();
     }
-    private String cnvZ3ExprToString(Expr expr){
-        if (expr.isBool()) {
-            return expr.toString();
+
+    private static String cnvZ3ExprToString(Expr expr){
+        if (expr.toString().startsWith("(as seq.empty")){
+            return "";
         }
-        return "";
+        if (expr.getArgs().length == 0) {
+            return expr.toString();
+        }else if(expr.getArgs().length == 1){
+            Expr[] args = expr.getArgs();
+            return cnvZ3ExprToString(args[0]);
+        }else {
+            Expr[] args = expr.getArgs();
+            return String.format("%s, %s", cnvZ3ExprToString(args[0]) , cnvZ3ExprToString(args[1]));
+        }
     }
 }
