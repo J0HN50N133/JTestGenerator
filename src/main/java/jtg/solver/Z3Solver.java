@@ -8,6 +8,7 @@ import soot.*;
 import soot.jimple.*;
 import soot.jimple.internal.*;
 
+import java.math.BigDecimal;
 import java.util.*;
 
 public class Z3Solver {
@@ -322,9 +323,42 @@ public class Z3Solver {
             }
 
         }catch (Exception e){
-            res.append(e);
+             e.printStackTrace();
         }
         return res.toString();
+    }
+
+    private static String cnvFPNum(String str) {
+
+        if(str.equals("0"))
+            return str;
+        String[] strarr = str.split(" ");
+        if(strarr[0].charAt(1) == '/' ){
+            BigDecimal a=null,b=null;
+            if(strarr[1].contains("(-")){
+                a = new BigDecimal("-"+strarr[2].replace(")",""));
+                if(strarr[3].contains("(-")){
+                    b = new BigDecimal("-"+strarr[4].replace(")",""));
+                }
+                else
+                    b = new BigDecimal(strarr[3].replace(")",""));
+            }
+
+            else {
+                a = new BigDecimal(strarr[1]);
+                if(strarr[2].contains("(-")){
+                    b = new BigDecimal("-"+strarr[3].replace(")",""));
+                }
+                else
+                    b = new BigDecimal(strarr[2].replace(")",""));
+            }
+            return a.divide(b).toString();
+        }
+//        else if(strarr[0].charAt(1) == '-' ){
+//            return "NaN";
+//        }
+
+        return "transFp(): 浮点数转换错误 ";
     }
 
     private static String cnvModelToReadable(Context ctx, Model model, Path path) {
@@ -359,8 +393,12 @@ public class Z3Solver {
     private static String cnvZ3ExprToString(Expr expr){
         if (expr.toString().startsWith("(as seq.empty")){
             return "";
-        }
-        if (expr.getArgs().length == 0) {
+        }else if (expr instanceof FPNum){
+            if (((FPNum) expr).isNaN()){
+                return "NaN";
+            }
+            return cnvFPNum(expr.toString());
+        }else if (expr.getArgs().length == 0) {
             return expr.toString();
         }else if(expr.getArgs().length == 1){
             Expr[] args = expr.getArgs();
