@@ -1,9 +1,11 @@
 package jtg.generator;
 
+import jtg.utils.Path;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -75,8 +77,12 @@ class VariableTypeTest {
         String clsName = "cut.VariableType";
         String methodName = "generateBool";
         SimpleGenerator sg = new SimpleGenerator(clspath, clsName, methodName);
-        List<String> ts = sg.generate();
-        assertTrue(!ts.isEmpty());
+        Set<Path> paths = sg.calculatePrimePath();
+        List<Path> paths1 = sg.calculateTestPath(paths);
+//        List<String> ts = sg.generate();
+        // 459 586
+        System.out.println(paths1.get(459));
+        System.out.println(paths1.get(586));
     }
 
     @Test
@@ -107,6 +113,15 @@ class VariableTypeTest {
         SimpleGenerator sg = new SimpleGenerator(clspath, clsName, methodName);
         List<String> ts = sg.generate();
         assertTrue(!ts.isEmpty());
+    }
+
+    @Test
+    void doWhileTest() {
+        String clspath = System.getProperty("user.dir") + File.separator + "target" + File.separator + "test-classes";
+        String clsName = "cut.LogicStructure";
+        String methodName = "doWhileTest";
+        SimpleGenerator sg = new SimpleGenerator(clspath, clsName, methodName);
+        List<String> ts = sg.generate();
     }
 
 }

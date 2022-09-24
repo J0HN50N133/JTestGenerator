@@ -2,16 +2,29 @@ package cut;
 
 
 public class LoopTest {
-    public boolean isPrime(int i){
-        if (i <= 1){
-            return false;
+    public int isPrime(int i){
+        while(i>0){
+            if(i>10)
+                i -= 2;
+            else
+                i -= 4;
         }
-        for (int j = 2; j < i; j++){
-            if (i % j == 0)
+        return i;
+    }
+
+    public boolean isPalindrome(int[] arr) {
+        if (arr.length == 0) return false;
+        int front = 0;
+        int back = arr.length - 1;
+        while (front < back) {
+            if (arr[front] != arr[back])
                 return false;
+            front++;
+            back--;
         }
         return true;
     }
+
     public int pat(char[] subject, char[] pattern){
         final int NotFound = -1;
         int iSub = 0;
@@ -37,6 +50,8 @@ public class LoopTest {
         return rtnIndex;
     }
     public int raise(int x, int k){
+        if (k == 0) return 1;
+        if (x == 0) return 0;
         int r = 1;
         if (k > 0) {
             while (k-- != 0) {
@@ -44,5 +59,15 @@ public class LoopTest {
             }
         }
         return r;
+    }
+    public int foo(int i0, int i1, int i2, int i3, int i4, int i5, boolean b){
+        b = !b;
+        i2 = i1+i0;
+        i1 = i2+i3;
+        i4 = i1+i2;
+        i5 = i4+i3;
+        if (i5 >0)
+            return i5;
+        return i4;
     }
 }

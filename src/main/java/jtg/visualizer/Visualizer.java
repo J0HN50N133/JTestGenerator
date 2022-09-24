@@ -4,48 +4,60 @@ import soot.*;
 import soot.jimple.internal.JAssignStmt;
 import soot.jimple.internal.JInvokeStmt;
 import soot.jimple.internal.JVirtualInvokeExpr;
-import soot.toolkits.graph.UnitGraph;
+import soot.toolkits.graph.*;
+import soot.tools.CFGViewer;
+import soot.util.cfgcmd.CFGGraphType;
+import soot.util.cfgcmd.CFGToDotGraph;
+import soot.util.dot.DotGraph;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.List;
 
 public class Visualizer {
 
     private static PrintStream ps;
 
     /**
-     * filename: 输出dot的文件名
-     * unitGraph: Soot生成的控制流图
-     * indexLabel: dot中显示节点序号(true)，还是Soot代码(false)
+     * @param filename: 输出dot的文件名
+     * @param unitGraph: Soot生成的控制流图
+     * @param indexLabel: dot中显示节点序号(true)，还是Soot代码(false)
      **/
 
     public static void printCFGDot(String filename, UnitGraph unitGraph, boolean indexLabel) {
-        try {
-            ps = new PrintStream(new FileOutputStream(filename));
-
-            ps.println("digraph G {");
-            int index = 0;
-            for (Unit unit : unitGraph) {
-                index += 1;
-                String aid = getID(unit);
-                String label = indexLabel ? String.valueOf(index) : getLabelFromUnit(unit);
-                ps.println("\t" + aid + "[label=\"" + label + "\"" + "]");
-            }
-
-            for (Unit unit : unitGraph) {
-                for (Unit suc : unitGraph.getSuccsOf(unit)) {
-                    String aid = getID(unit);
-                    String bid = getID(suc);
-                    ps.println("\t" + aid + "->" + bid + ";");
-                }
-            }
-            ps.println("}");
-            ps.close();
-            Dot.showDot(filename);
-        } catch (IOException exx) {
-            TGConsole.out.println("printDOT failed: " + exx.toString());
-        }
+        List<Unit> heads = unitGraph.getHeads();
+        CFGToDotGraph cfgToDotGraph = new CFGToDotGraph();
+        BriefBlockGraph blocks = new BriefBlockGraph(unitGraph.getBody());
+        DotGraph dotGraph = cfgToDotGraph.drawCFG(blocks, unitGraph.getBody());
+        dotGraph.plot(filename);
+        Dot.showDot(filename);
+        System.out.println(CFGGraphType.help(0, 0, 0));
+//        try {
+//            ps = new PrintStream(new FileOutputStream(filename));
+//
+//            ps.println("digraph G {");
+//            int index = 0;
+//            for (Unit unit : unitGraph) {
+//                index += 1;
+//                String aid = getID(unit);
+//                String label = indexLabel ? String.valueOf(index) : getLabelFromUnit(unit);
+//                ps.println("\t" + aid + "[label=\"" + label + "\"" + "]");
+//            }
+//
+//            for (Unit unit : unitGraph) {
+//                for (Unit suc : unitGraph.getSuccsOf(unit)) {
+//                    String aid = getID(unit);
+//                    String bid = getID(suc);
+//                    ps.println("\t" + aid + "->" + bid + ";");
+//                }
+//            }
+//            ps.println("}");
+//            ps.close();
+//            Dot.showDot(filename);
+//        } catch (IOException exx) {
+//            TGConsole.out.println("printDOT failed: " + exx.toString());
+//        }
     }
 
     //有缺陷还未调试

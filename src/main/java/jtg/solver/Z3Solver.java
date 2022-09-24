@@ -1,8 +1,8 @@
 package jtg.solver;
 
-import com.microsoft.z3.*;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
+import com.microsoft.z3.*;
 import jtg.utils.Path;
 import soot.*;
 import soot.jimple.*;

@@ -1,6 +1,5 @@
 package jtg.visualizer;
 
-import jtg.generator.SimpleGenerator;
 import org.junit.jupiter.api.Test;
 import soot.G;
 import soot.Scene;
@@ -12,8 +11,7 @@ import soot.toolkits.graph.ClassicCompleteUnitGraph;
 import soot.toolkits.graph.UnitGraph;
 
 import java.io.File;
-
-import static org.junit.jupiter.api.Assertions.*;
+import java.util.Locale;
 
 class VisualizerTest {
 
@@ -26,7 +24,6 @@ class VisualizerTest {
         String clsName = "cut.LogicStructure";
         String methodName = "ifElse";
         //setupSoot
-        System.out.println(sourceDirectory);
         G.reset();
         Options.v().set_prepend_classpath(true);
         Options.v().set_allow_phantom_refs(true);
@@ -41,8 +38,8 @@ class VisualizerTest {
         JimpleBody body = (JimpleBody) sm.retrieveActiveBody();
 
         UnitGraph ug = new ClassicCompleteUnitGraph(sm.retrieveActiveBody());
-        Visualizer.printCFGDot("ifElse_cfg_label_with_index",ug,true);
-        Visualizer.printCFGDot("ifElse_cfg_label_with_SootCode",ug,false);
+        Visualizer.printCFGDot("ifElse_cfg_label_with_index.png",ug,true);
+        Visualizer.printCFGDot("ifElse_cfg_label_with_SootCode.png",ug,false);
     }
 
     @Test
@@ -80,8 +77,8 @@ class VisualizerTest {
         String sourceDirectory = System.getProperty("user.dir") + File.separator + "target" + File.separator + "test-classes";
         System.out.println(sourceDirectory);
 
-        String clsName = "cut.LogicStructure";
-        String methodName = "multipleIf";
+        String clsName = "cut.VariableType";
+        String methodName = "generateFloat";
         //setupSoot
         System.out.println(sourceDirectory);
         G.reset();
@@ -98,7 +95,7 @@ class VisualizerTest {
         JimpleBody body = (JimpleBody) sm.retrieveActiveBody();
 
         UnitGraph ug = new ClassicCompleteUnitGraph(sm.retrieveActiveBody());
-        Visualizer.printCFGDot("multipleIf_cfg_label_with_index",ug,true);
-        Visualizer.printCFGDot("multipleIf_cfg_label_with_SootCode",ug,false);
+        Visualizer.printCFGDot(methodName.toLowerCase()+"_cfg_label_with_index.dot",ug,true);
+        Visualizer.printCFGDot(methodName.toLowerCase()+"_cfg_label_with_SootCode.dot",ug,false);
     }
 }

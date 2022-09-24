@@ -1,12 +1,15 @@
 package jtg.generator;
 
-import jtg.utils.Path;
 import jtg.graphics.SootCFG;
-import jtg.solver.Z3Solver;
+import jtg.utils.Path;
 import jtg.visualizer.Visualizer;
 import soot.Body;
 import soot.Local;
 import soot.Unit;
+import soot.UnitBox;
+import soot.jimple.GotoStmt;
+import soot.jimple.IfStmt;
+import soot.jimple.internal.JIfStmt;
 import soot.toolkits.graph.UnitGraph;
 
 import java.io.File;
@@ -37,6 +40,41 @@ public class SimpleGenerator {
 
     public void drawCFG(String graphName, boolean indexLabel) {
         Visualizer.printCFGDot(graphName, ug, indexLabel);
+    }
+
+    public List<BasicBlock> cutIntoBB(){
+        return cutIntoBB(ug);
+    }
+
+    static public List<BasicBlock> cutIntoBB(UnitGraph units){
+        Set<Unit> leaderUnit = new HashSet<>();
+        List<BasicBlock> blocks = new ArrayList<>();
+        boolean predIsBranch = false;
+        for (Unit unit : units) {
+            if (predIsBranch) {
+                leaderUnit.add(unit);
+                predIsBranch = false;
+            }
+            if (unit.branches()){
+                if (unit instanceof IfStmt) {
+                    IfStmt stmt = (IfStmt) unit;
+                    leaderUnit.add(stmt.getTarget());
+                } else if (unit instanceof GotoStmt) {
+                    GotoStmt stmt = (GotoStmt) unit;
+                    leaderUnit.add(stmt.getTarget());
+                }
+                predIsBranch = true;
+            }
+        }
+        List<Unit> basicBlock = new ArrayList<>();
+        for (Unit unit : units) {
+            if (leaderUnit.contains(unit) && basicBlock.size() > 0) {
+                blocks.add(new BasicBlock(basicBlock));
+                basicBlock.clear();
+            }
+            basicBlock.add(unit);
+        }
+        return blocks;
     }
 
 
@@ -71,6 +109,7 @@ public class SimpleGenerator {
         try {
             expectResSet = new ArrayList<String>();
             testSet = new ArrayList<String>();
+            System.out.println(ug.getBody().toString());
             Set<Path> primePaths = calculatePrimePath();
             List<Path> testPaths = calculateTestPath(primePaths);
             for (Path testPath : testPaths) {
@@ -131,7 +170,6 @@ public class SimpleGenerator {
     }
 
     public Set<Path> calculatePrimePath(){
-        System.out.println(ug.getBody().toString());
         Set<Path> set = new LinkedHashSet<>();
         for (Unit unit : ug) {
             // 计算以unit为根的结点树

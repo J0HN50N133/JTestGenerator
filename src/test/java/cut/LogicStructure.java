@@ -34,5 +34,10 @@ public class LogicStructure {
             return Integer.toString(op);
     }
 
-
+    public void doWhileTest(String[] args){
+        int x = 0;
+        for (int i = 0; i < 10; i++){
+            x = x + 1;
+        }
+    }
 }

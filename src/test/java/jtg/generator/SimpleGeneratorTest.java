@@ -56,8 +56,11 @@ class SimpleGeneratorTest {
         String clsName = "cut.LogicStructure";
         String methodName = "sequence";
         SimpleGenerator sg = new SimpleGenerator(clspath, clsName, methodName);
-        List<String> ts = sg.generate();
-        assertTrue(!ts.isEmpty());
+        List<Path> paths = sg.calculateTestPath(sg.calculatePrimePath());
+        for (Path path : paths) {
+        }
+//        List<String> ts = sg.generate();
+//        assertTrue(!ts.isEmpty());
 
     }
 
@@ -65,11 +68,24 @@ class SimpleGeneratorTest {
     void test_path_generate() {
         String clspath = System.getProperty("user.dir") + File.separator + "target" + File.separator + "test-classes";
         String clsName = "cut.LoopTest";
-        String methodName = "raise";
+        String methodName = "isPrime";
         SimpleGenerator sg = new SimpleGenerator(clspath, clsName, methodName);
         Set<Path> primePaths = sg.calculatePrimePath();
-        List<String> ts = sg.generate();
-        assertTrue(!ts.isEmpty());
+        List<Path> paths = sg.calculateTestPath(primePaths);
+        sg.generate();
+//        System.out.println(paths.size()+"条测试路径");
 
+    }
+    @Test
+    void test_cut_into_bb(){
+        String clspath = System.getProperty("user.dir") + File.separator + "target" + File.separator + "test-classes";
+        String clsName = "cut.LoopTest";
+        String methodName = "isPrime";
+        SimpleGenerator sg = new SimpleGenerator(clspath, clsName, methodName);
+        int count = 0;
+        for (BasicBlock basicBlock : sg.cutIntoBB()) {
+            System.out.println("blocks " + count++ + ":");
+            System.out.println(basicBlock);
+        }
     }
 }
